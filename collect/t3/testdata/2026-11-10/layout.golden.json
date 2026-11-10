@@ -1,0 +1,46 @@
+{
+  "root": "user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice",
+  "limits": {
+    "memory_high": 60867600384,
+    "memory_max": 63015084032,
+    "cpu_weight": 10,
+    "io_weight": 10,
+    "pids_max": 127955
+  },
+  "scopes": [
+    {
+      "unit": "t3code-claude-e75ed6ee.scope",
+      "name": "claude",
+      "slice": "app-t3code-agents-8368d857dd36.slice",
+      "path": "user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-8368d857dd36.slice/t3code-claude-e75ed6ee.scope",
+      "pids": [
+        1858091,
+        1858122,
+        1858123,
+        1858211
+      ],
+      "agent": 1858091,
+      "thread_id": "5e6f7a8b-2222-4222-8222-222222222222"
+    },
+    {
+      "unit": "t3code-claude-fb0fc8f9.scope",
+      "name": "claude",
+      "slice": "app-t3code-agents-8368d857dd36.slice",
+      "path": "user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-8368d857dd36.slice/t3code-claude-fb0fc8f9.scope",
+      "pids": [
+        1883671,
+        1883700,
+        1883701,
+        1883785,
+        1889678,
+        1889856,
+        1889867,
+        1890000,
+        1890020,
+        1890047
+      ],
+      "agent": 1883671,
+      "thread_id": "1a2b3c4d-1111-4111-8111-111111111111"
+    }
+  ]
+}
