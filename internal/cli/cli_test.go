@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -229,25 +230,25 @@ func TestErrors(t *testing.T) {
 func TestThreadCache(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "state", "t3-threads.json")
 	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
-	calls := 0
+	var asked atomic.Int32 // show runs in parallel
 	show := func(_ context.Context, id string) (t3.Thread, error) {
-		calls++
+		asked.Add(1)
 		if id == "bad" {
 			return t3.Thread{}, errors.New("no such thread")
 		}
 		return t3.Thread{ID: id, Title: "Title of " + id, Model: "m", Status: "running"}, nil
 	}
 	got := lookupThreads([]string{"a", "bad"}, file, now, show)
-	if len(got) != 1 || got["a"].Title != "Title of a" || calls != 2 {
-		t.Fatalf("first lookup: %v after %d calls", got, calls)
+	if len(got) != 1 || got["a"].Title != "Title of a" || asked.Load() != 2 {
+		t.Fatalf("first lookup: %v after %d calls", got, asked.Load())
 	}
 	// Within ten minutes the answer comes from the file; failures aren't kept.
 	got = lookupThreads([]string{"a", "bad"}, file, now.Add(9*time.Minute), show)
-	if got["a"].Title != "Title of a" || got["a"].Status != "" || calls != 3 {
-		t.Errorf("second lookup: %v after %d calls; want the kept title, no status, and one call for the failed id", got, calls)
+	if got["a"].Title != "Title of a" || got["a"].Status != "" || asked.Load() != 3 {
+		t.Errorf("second lookup: %v after %d calls; want the kept title, no status, and one call for the failed id", got, asked.Load())
 	}
 	got = lookupThreads([]string{"a"}, file, now.Add(11*time.Minute), show)
-	if got["a"].Title != "Title of a" || calls != 4 {
-		t.Errorf("after ten minutes: %v after %d calls; want T3 asked again", got, calls)
+	if got["a"].Title != "Title of a" || asked.Load() != 4 {
+		t.Errorf("after ten minutes: %v after %d calls; want T3 asked again", got, asked.Load())
 	}
 }

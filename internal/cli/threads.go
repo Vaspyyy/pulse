@@ -43,14 +43,19 @@ func lookupThreads(ids []string, cacheFile string, now time.Time, show func(cont
 	out := map[string]t3.Thread{}
 	ctx, cancel := context.WithTimeout(context.Background(), threadLimit)
 	defer cancel()
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	fetched := false
+	// Sort out first what's missing: the fetches below write to the cache.
+	var missing []string
 	for _, id := range ids {
 		if c, ok := cache[id]; ok && now.Sub(c.At) < threadTTL {
 			out[id] = t3.Thread{ID: id, Title: c.Title, Model: c.Model}
-			continue
+		} else {
+			missing = append(missing, id)
 		}
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	fetched := false
+	for _, id := range missing {
 		wg.Go(func() {
 			th, err := show(ctx, id)
 			if err != nil {
