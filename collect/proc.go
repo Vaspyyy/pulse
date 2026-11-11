@@ -78,36 +78,49 @@ func (c *Collector) readProcs(s *Snapshot) {
 		if err != nil || pid <= 0 {
 			continue
 		}
-		dir := e.Name()
-		b, err := fs.ReadFile(c.roots.Proc, path.Join(dir, "stat"))
-		if err != nil {
+		p, ok := c.Process(pid)
+		if !ok {
 			continue
-		}
-		p, err := parseProcStat(b)
-		if err != nil {
-			continue
-		}
-		p.PID = pid
-		if b, err := fs.ReadFile(c.roots.Proc, path.Join(dir, "statm")); err == nil {
-			f := strings.Fields(string(b))
-			if len(f) >= 3 {
-				rss, _ := strconv.ParseUint(f[1], 10, 64)
-				shared, _ := strconv.ParseUint(f[2], 10, 64)
-				p.RSS, p.Shared = rss*c.pageSize, shared*c.pageSize
-			}
 		}
 		key := procKey{pid, p.Start, p.Comm}
-		st := c.static[key]
-		if st == nil {
-			st = c.readStatic(dir, p.Kernel)
-		}
-		seen[key] = st
-		p.Args, p.Cgroup, p.Env, p.EnvRead = st.args, st.cgroup, st.env, st.envRead
+		seen[key] = c.static[key]
 		s.Procs = append(s.Procs, p)
 	}
 	c.static = seen // forget processes that are gone
 	// ReadDir sorts by name, so "10" came before "9".
 	slices.SortFunc(s.Procs, func(a, b Process) int { return a.PID - b.PID })
+}
+
+// Process reads one process. ok is false when it's gone. What doesn't
+// change while it runs is remembered until the next Snapshot that doesn't
+// see the process.
+func (c *Collector) Process(pid int) (p Process, ok bool) {
+	dir := strconv.Itoa(pid)
+	b, err := fs.ReadFile(c.roots.Proc, path.Join(dir, "stat"))
+	if err != nil {
+		return Process{}, false
+	}
+	p, err = parseProcStat(b)
+	if err != nil {
+		return Process{}, false
+	}
+	p.PID = pid
+	if b, err := fs.ReadFile(c.roots.Proc, path.Join(dir, "statm")); err == nil {
+		f := strings.Fields(string(b))
+		if len(f) >= 3 {
+			rss, _ := strconv.ParseUint(f[1], 10, 64)
+			shared, _ := strconv.ParseUint(f[2], 10, 64)
+			p.RSS, p.Shared = rss*c.pageSize, shared*c.pageSize
+		}
+	}
+	key := procKey{pid, p.Start, p.Comm}
+	st := c.static[key]
+	if st == nil {
+		st = c.readStatic(dir, p.Kernel)
+		c.static[key] = st
+	}
+	p.Args, p.Cgroup, p.Env, p.EnvRead = st.args, st.cgroup, st.env, st.envRead
+	return p, true
 }
 
 func (c *Collector) readStatic(dir string, kernel bool) *static {

@@ -67,7 +67,7 @@ func agents(v *query.View, env Env) (report, error) {
 		if mem == 0 {
 			mem = l.total.Private
 		}
-		note := clip(project(env.Roots.Proc, s.Agent), 24)
+		note := clip(project(cwd(env.Roots.Proc, s.Agent)), 24)
 		if s.OOMKills > 0 {
 			note = strings.TrimSpace(note + fmt.Sprintf("  %d killed for memory", s.OOMKills))
 		}
@@ -92,18 +92,22 @@ func agents(v *query.View, env Env) (report, error) {
 	return r, nil
 }
 
-// project names what an agent works on, from its working directory: the
-// directory's name, or the project's for a T3 worktree
-// (…/worktrees/<project>/<worktree>).
-func project(proc fs.FS, pid int) string {
+// cwd returns a process's working directory, "" when it can't be read.
+func cwd(proc fs.FS, pid int) string {
 	if pid == 0 {
 		return ""
 	}
-	cwd, err := fs.ReadLink(proc, path.Join(strconv.Itoa(pid), "cwd"))
-	if err != nil || cwd == "" {
+	dir, _ := fs.ReadLink(proc, path.Join(strconv.Itoa(pid), "cwd"))
+	return dir
+}
+
+// project names what a directory belongs to: the directory's name, or the
+// project's for a T3 worktree (…/worktrees/<project>/<worktree>).
+func project(dir string) string {
+	if dir == "" {
 		return ""
 	}
-	parts := strings.Split(strings.Trim(cwd, "/"), "/")
+	parts := strings.Split(strings.Trim(dir, "/"), "/")
 	if n := len(parts); n >= 3 && parts[n-3] == "worktrees" {
 		return parts[n-2]
 	}

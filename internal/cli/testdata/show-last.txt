@@ -1,0 +1,16 @@
+cargo test in pulse@def4567+ (main), 11-09 22:40, r9q4xt (change)
+exit 0, 61.0 s
+  cpu    701 s (660 user, 41.0 sys), 11.5 cores on average
+  peak   11.5 GB private memory (sampled every 100 ms); largest process 4.4 GB RSS (pulse-test)
+  stall  cpu 9.8 s, memory 1.2 s, io 0.6 s
+  io     1.2 GB read, 3.4 GB written
+  other  a game (Hades), 2.1 cores on average: wall time isn't comparable with a quiet run's
+processes, as sampled
+  rustc syn   31.0 s cpu  2.1 GB at most
+  rustc ×211   559 s cpu  1.4 GB at most
+  cc ×40      41.0 s cpu  210 MB at most
+  cargo test   2.0 s cpu   90 MB at most
+over time, 0.8 s per block
+  cores  ▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██  up to 15.2
+  memory ▁▁▁▁▁▁▁▂▂▂▂▂▂▂▂▃▃▃▃▃▃▃▄▄▄▄▄▄▄▄▅▅▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇▇████████  up to 11.5 GB
+next: pulse diff r7k2mq r9q4xt   against the run of the same command before it

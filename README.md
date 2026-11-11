@@ -34,10 +34,35 @@ ln -s "$PWD/skill" ~/.claude/skills/pulse   # from a checkout, for agents
 | `pulse top [--by cpu\|mem\|gpu]` | the heaviest groups of processes |
 | `pulse tree <handle\|pid\|name>` | a process and what it started, with totals |
 | `pulse agents` | T3's agents: thread, model, CPU, memory, and their memory limits |
+| `pulse run [-n name] -- <command>` | runs a command and records what it used |
+| `pulse runs` | the recorded runs |
+| `pulse show [run]` | one run: numbers, processes, timeline |
+| `pulse diff [run] [run]` | two runs side by side |
+
+```
+$ pulse run -n after -- cargo test
+pulse: cargo test, exit 0, 61.0 s, recorded as r9q4xt (after)
+  cpu    701 s (660 user, 41.0 sys), 11.5 cores on average
+  peak   11.5 GB private memory (sampled every 100 ms); largest process 4.4 GB RSS (pulse-test)
+  stall  cpu 9.8 s, memory 1.2 s, io 0.6 s
+  other  a game (Hades), 2.1 cores on average: wall time isn't comparable with a quiet run's
+
+$ pulse diff before after
+cargo test in pulse: abc123f (r7k2mq, 11-08 21:14) vs def4567 (r9q4xt, 11-09 22:40)
+                 before             after              change
+wall             48.2 s             61.0 s             +27 %
+cpu              653 s              701 s              +7 %
+peak memory      8.9 GB             11.5 GB            +2.6 GB
+largest process  rustc syn 2.1 GB   pulse-test 4.4 GB  +2.3 GB
+note: r9q4xt overlapped other load, so its wall time isn't comparable
+next: recap abc123f..def4567   what changed between the two runs
+```
+
+Inside a T3 agent, a run gets a cgroup of its own below the agent's scope, so its CPU time and stall times are exact however it forks, and T3's limits and stop button still cover it.
 
 GPU numbers come from NVML for NVIDIA (loaded at runtime, no cgo) and from sysfs for AMD. When "busy" starts, and which other programs count as games, is set in `~/.config/pulse-monitor/config`: `pulse help config` lists the keys.
 
-[skill/SKILL.md](skill/SKILL.md) explains the output. [docs/design.md](docs/design.md) is the plan: what exists is milestone M0 plus GPU and temperatures, without recorded runs or the TUI.
+[skill/SKILL.md](skill/SKILL.md) explains the output. [docs/design.md](docs/design.md) is the plan: what exists is milestones M0 and M2 plus GPU and temperatures; the TUI and the Prism integration are still to come.
 
 ## Development
 

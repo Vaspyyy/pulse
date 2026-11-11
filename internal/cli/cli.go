@@ -26,8 +26,12 @@ const defaultBudget = 12
 type Env struct {
 	Roots  collect.Roots
 	UID    int
+	Stdin  io.Reader // for the command pulse run starts
 	Stdout io.Writer
 	Stderr io.Writer
+	// Getenv reads the environment; StateDir is where runs are kept.
+	Getenv   func(string) string
+	StateDir string
 	// Sleep waits between the two readings.
 	Sleep func(time.Duration)
 	// Now is the clock; nil means time.Now.
@@ -52,6 +56,15 @@ const usage = `pulse: what is using this machine
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
 
+  pulse run [-n name] -- <command>  run a command and record what it uses
+  pulse runs                  the recorded runs
+  pulse show [run]            one run: numbers, processes, timeline
+  pulse diff [run] [run]      two runs side by side
+
+A run is named by its id (r7k2mq), the name given with -n, or "last".
+pulse diff alone compares the newest run with the one of the same
+command before it.
+
   -b <lines>   line budget (default 12)
 
 Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
@@ -63,13 +76,22 @@ Run pulse load before timing measurements: if it says busy, skip them.
 `
 
 type options struct {
-	budget int
-	by     string
-	args   []string
+	budget    int
+	budgetSet bool
+	by        string
+	args      []string
 }
 
 // Run runs one command and returns the exit code.
 func Run(args []string, env Env) int {
+	if len(args) > 0 && args[0] == "run" {
+		// Everything after run's own flags is the command's, untouched.
+		cfg, problems := parseConfig(env.Config)
+		for _, p := range problems {
+			fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
+		}
+		return runCommand(args[1:], env, cfg)
+	}
 	o, err := parse(args)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "pulse: %v\n", err)
@@ -106,6 +128,27 @@ func Run(args []string, env Env) int {
 		r, err = tree(view(env, cfg), o.args[0])
 	case "agents":
 		r, err = agents(view(env, cfg), env)
+	case "runs":
+		r = runs(env)
+	case "show":
+		ref := "last"
+		if len(o.args) > 1 {
+			fmt.Fprintln(env.Stderr, "pulse: show takes one run")
+			return 2
+		}
+		if len(o.args) == 1 {
+			ref = o.args[0]
+		}
+		if !o.budgetSet {
+			o.budget = 24
+		}
+		r, err = show(env, ref)
+	case "diff":
+		// Room for every row and note: a cut-off note would mislead.
+		if !o.budgetSet {
+			o.budget = 16
+		}
+		r, err = diff(env, o.args)
 	default:
 		fmt.Fprintf(env.Stderr, "pulse: unknown command %q; pulse help lists them\n", cmd)
 		return 2
@@ -144,7 +187,7 @@ func parse(args []string) (options, error) {
 			if err != nil || n < 1 {
 				return o, fmt.Errorf("-b %s: want a number of lines", v)
 			}
-			o.budget = n
+			o.budget, o.budgetSet = n, true
 		case "--by":
 			v, err := value()
 			if err != nil {

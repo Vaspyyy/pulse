@@ -1,0 +1,12 @@
+cargo test in pulse: def4567 (r9q4xt, 11-09 22:40) vs abc123f (r7k2mq, 11-08 21:14)
+                 before                                after                              change
+wall             61.0 s                                48.2 s                             -21 %
+cpu              701 s                                 653 s                              -7 %
+peak memory      11.5 GB                               8.9 GB                             -2.6 GB
+largest process  pulse-test 4.4 GB                     rustc syn 2.1 GB                   -2.3 GB
+stalled          cpu 9.8 s, memory 1.2 s, io 0.6 s     cpu 2.1 s, memory 0.0 s, io 0.4 s
+written          3.4 GB                                3.4 GB                             about the same
+other load       a game (Hades), 2.1 cores on average  0.4 cores on average, no game
+note: r9q4xt overlapped other load, so its wall time isn't comparable
+next: recap def4567..abc123f   what changed between the two runs
+next: pulse show r7k2mq        the second run in detail

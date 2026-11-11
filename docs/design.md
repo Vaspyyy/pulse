@@ -1,6 +1,6 @@
 # Pulse: design
 
-Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)). Fifth pass, the same day: GPU (NVML, sysfs), temperatures and the config file are built, and the GPU part of the load verdict now goes by power draw, because utilisation turned out to mislead (see [the load verdict](#the-load-verdict)).
+Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)). Fifth pass, the same day: GPU (NVML, sysfs), temperatures and the config file are built, and the GPU part of the load verdict now goes by power draw, because utilisation turned out to mislead (see [the load verdict](#the-load-verdict)). Sixth pass, the same day: `pulse run`, the run store, `runs`, `show` and `diff` are built (M2); what changed while building them is marked "as built" under [recording runs](#recording-runs).
 
 Pulse is a personal tool for one machine, where agents always run in T3 Code. So T3 is a first-class target, not an optional extra.
 
@@ -89,7 +89,7 @@ Kept as pitched: two interfaces on one collector, standalone first, no daemon, p
 | `collect/collecttest` | `collect` | builds a fake machine (`/proc` and `/sys` trees) for tests |
 | `collect/t3` | stdlib | T3's agent slices, scopes, limits, memory use and threads. **Exists**, with its tests |
 | `collect/gpu` | `purego` | NVML loaded at runtime; AMD and Intel from sysfs. **Exists**; per-process numbers for NVIDIA only |
-| `record` | `collect` | samples a process tree while it runs; owns the run store format |
+| `record` | `collect`, `internal/query` | runs a command in its own cgroup and samples it; owns the run store format. **Exists** |
 | `internal/query` | `collect`, `record` | grouping, trees, games, the load verdict, diffs. **Exists**, without diffs |
 | `attrib` | `query`, `prism/repo` | repo, session and crux attribution, each with a basis |
 | `internal/cli` | `query`, `attrib`, `prism/report` | text and JSON output. **Exists**, text only |
@@ -336,8 +336,19 @@ What that gives:
 | Largest single process's peak RSS | `wait4` rusage (`ru_maxrss`) | exact, among waited descendants |
 | Peak private memory, summed | `statm` of the members, every 100 ms (backing off to 1 s for long runs) | can miss spikes shorter than the interval; output says "sampled" |
 | GPU | NVML, per member | as sampled |
-| IO | `/proc/<pid>/io` of the members | as sampled; misses processes that exit between samples |
+| IO | `wait4` rusage (`ru_inblock`, `ru_oublock`) | exact, among waited descendants |
 | Other load | samples of everything outside the run | marks runs that aren't comparable |
+
+**As built (2026-11-11):**
+
+- **Only in a delegated unit.** Pulse asks systemd (`systemctl --user show <unit> -p Delegate`, 6 ms) whether the unit it runs in is delegated, and makes the run cgroup only then. An ordinary app scope is writable too, but systemd considers its subtree its own. T3's agent scopes are delegated; elsewhere the fallback below applies.
+- **Stall time includes CPU** (`cpu.pressure`), next to memory and IO: it shows a run that was held up by an oversubscribed machine.
+- **IO comes from `wait4`** (`ru_inblock`, `ru_oublock`), not from sampling `/proc/<pid>/io`: it's exact for the command and the descendants it waited for, where sampling misses every short-lived compiler.
+- **Other load is measured exactly for the whole run:** the machine's busy time from `/proc/stat` minus the run's CPU time. Games and the GPU are looked at every two seconds. A run counts as disturbed when a game ran or other work averaged above a quarter of the CPUs. Under a quarter second of run, the kernel's hundredths are too coarse and other load is "too short a run to tell".
+- **The clock and the cgroup's CPU time are read together** at the start of each sample. Reading the CPU time after the process list made the first samples show more cores than the machine has.
+- **Sampling:** every 100 ms, the first one 25 ms in. The timeline holds 600 points; when it's full, points are merged in pairs (average cores, highest memory) and sampling slows, to 800 ms at most. The per-process breakdown is sampled, and `pulse show` says how much CPU time it didn't catch (about half for a `go build -a`, whose compilers are short-lived). The total is exact regardless.
+- **Run references:** an id, the name given with `-n` (the newest run of that name), or `last`. `pulse diff` alone compares the newest run with the previous run of the same command and directory.
+- **Git state without Prism for now:** `git rev-parse` before the command starts, and `git status --porcelain --untracked-files=no` next to it with `GIT_OPTIONAL_LOCKS=0`, so it never takes the index lock from the measured command. `prism/repo` replaces this in M3.
 
 **What it can't give: the kernel's exact memory peak.** `memory.peak` needs the memory controller enabled below the agent's scope, and the kernel refuses that while the scope has processes of its own (tested: `EBUSY`; the scope was unchanged). Making room would mean moving T3's agent process into a child cgroup, which is meddling with T3's layout. Not done; memory stays sampled.
 
@@ -347,7 +358,7 @@ What that gives:
 
 ### Run store
 
-- `$XDG_STATE_HOME/pulse-monitor/runs/`: one compressed JSON file per run, plus an index. Not `pulse/`, because `~/.config/pulse` is PulseAudio's and PipeWire's directory (it exists on this machine). The config file goes in `$XDG_CONFIG_HOME/pulse-monitor/`.
+- `$XDG_STATE_HOME/pulse-monitor/runs/`: one compressed JSON file per run, named by start time and id. No index: a record is about 10 KB, so listing reads the files, and there is nothing to get out of step. Not `pulse/`, because `~/.config/pulse` is PulseAudio's and PipeWire's directory (it exists on this machine). The config file goes in `$XDG_CONFIG_HOME/pulse-monitor/`.
 - Each record holds: command, cwd, repo root, HEAD, branch, dirty flag, session, start time, exit, the summary, a downsampled timeline (at most 600 points), the top processes, and other load.
 - Retention: the last 200 runs or 200 MB, oldest first out.
 - Not in the git dir with Prism's context: records must outlive Prism's 60-minute expiry and branch switches, since comparing before and after a change across branches is the point.
@@ -405,7 +416,7 @@ The 2026-11-08 benchmark (52 runs, Sonnet 5.5, 13 tasks on 9 repos) found agents
 | M0 | collector (no GPU; T3 discovery is done in `collect/t3`), identity, card, `load`, `top`, `tree`, `agents`, SKILL.md | **done 2026-11-11**: golden tests on a built `/proc` tree pass; the card is 10 lines on the target machine. `agents` came forward from M3, since it needs no Prism. Not in M0: `--json`, the `context:` line and "this repo" (M3), `--by gpu\|io`, the config file. Steam and Heroic detection is tested on built processes only, until real games are tried |
 | A | eval A | results written up: go, or fix discoverability first |
 | M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures. **GPU, temperatures and the config file are done (2026-11-11)**, with `top --by gpu` and GPU columns in the card, `top` and `tree`; the TUI isn't started | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes |
-| M2 | `pulse run`, run store, `runs`, `show`, `diff`, other-load marks | the diff of two fixture runs matches its golden file |
+| M2 | `pulse run`, run store, `runs`, `show`, `diff`, other-load marks | **done 2026-11-11**: the diff of two fixture runs matches its golden file; the recorder is tested on real helper processes, with a cgroup inside a T3 agent scope and without |
 | M3 | Prism adapter: envelope, `report.Pulse`, attribution, `project`, `agents`, `next:` lines | e2e: every ref Pulse JSON contains is valid (normally none); context off shows the same processes |
 | M4 | crux: `resources:` line, run store, `next: pulse show` | e2e: crux's `next: pulse show` and Pulse's `next: recap` run as printed |
 | B | eval B | results written up |
@@ -463,6 +474,8 @@ Each can be revisited; the reason says what would change it.
 | Totals use private memory from `statm`; PSS only on request | summed RSS overcounts shared libraries; PSS took 397 ms for a third of the processes that `statm` read in 5.6 ms, and locks each process's memory map while it reads |
 | T3 is a first-class target | a personal tool on a machine where agents always run in T3 |
 | Thread details from `t3 thread show --json`, cached | T3's own CLI, which it hands to every agent; nothing internal is read. At about 0.8 s a call, it can't run on every refresh |
+| The run cgroup only in a delegated unit | a scope that isn't delegated is writable too, but its subtree is systemd's. One `systemctl show` (6 ms) tells them apart |
+| IO from `wait4`, not from sampled `/proc/<pid>/io` | sampling misses short-lived processes, which is most of a build |
 | A live contract test for T3 | T3 internals can change with any update; a failing test is better than wrong numbers |
 | The name stays Pulse; files go under `pulse-monitor/` | the binary name `pulse` is free and fits the other tools' short names; `~/.config/pulse` belongs to PulseAudio and PipeWire |
 

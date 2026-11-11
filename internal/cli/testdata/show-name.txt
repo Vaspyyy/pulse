@@ -1,0 +1,15 @@
+cargo test in pulse@abc123f (main), 11-08 21:14, r7k2mq (base)
+exit 0, 48.2 s
+  cpu    653 s (612 user, 41.0 sys), 13.5 cores on average
+  peak   8.9 GB private memory (sampled every 100 ms); largest process 2.1 GB RSS (rustc syn)
+  stall  cpu 2.1 s, memory 0.0 s, io 0.4 s
+  io     1.2 GB read, 3.4 GB written
+  other  0.4 cores on average, no game
+processes, as sampled
+  rustc syn   31.0 s cpu  2.1 GB at most
+  rustc ×211   559 s cpu  1.4 GB at most
+  cc ×40      41.0 s cpu  210 MB at most
+  cargo test   2.0 s cpu   90 MB at most
+over time, 0.8 s per block
+  cores  ▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██▁▂▃▃▄▅▆▇██  up to 15.2
+  memory ▁▁▁▁▁▁▁▂▂▂▂▂▂▂▂▃▃▃▃▃▃▃▄▄▄▄▄▄▄▄▅▅▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇▇████████  up to 8.9 GB

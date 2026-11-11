@@ -1,0 +1,13 @@
+rmmmm2, 11-07 09:05 vs def4567 (r9q4xt, 11-09 22:40)
+                 before                after                                 change
+wall             1.2 s                 61.0 s                                +4983 %
+cpu              2.4 s                 701 s                                 +29108 %
+peak memory      300 MB                11.5 GB                               +11.2 GB
+largest process  310 MB                pulse-test 4.4 GB                     +4.1 GB
+written          0 KB                  3.4 GB                                +3.4 GB
+other load       5.5 cores on average  a game (Hades), 2.1 cores on average
+note: these aren't the same command in the same directory, so the numbers compare only loosely
+note: rmmmm2 ended with exit 2, so it may have done less work
+note: both runs overlapped other load, so their wall times aren't comparable
+note: the runs were measured differently (tree and cgroup): cpu time of a sampled tree can miss processes
+next: pulse show r9q4xt   the second run in detail

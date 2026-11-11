@@ -1,0 +1,5 @@
+r9q4xt  11-09 22:40  cargo test  exit 0  61.0 s  701 s cpu  11.5 GB  pulse@def4567+  change  other load
+r7k2mq  11-08 21:14  cargo test  exit 0  48.2 s  653 s cpu   8.9 GB  pulse@abc123f   base
+rmmmm2  11-07 09:05  make -j8    exit 2   1.2 s  2.4 s cpu   300 MB  other                   other load
+next: pulse show r9q4xt          the newest run in detail
+next: pulse diff r7k2mq r9q4xt   against the run of the same command before it

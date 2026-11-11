@@ -119,11 +119,15 @@ func runEnv(t *testing.T, m *collecttest.Machine, used map[int]uint64, change fu
 	t.Helper()
 	var out, errOut bytes.Buffer
 	env := Env{
-		Roots:  m.Roots(),
+		Getenv: func(string) string { return "" },
 		UID:    1000,
 		Stdout: &out,
 		Stderr: &errOut,
-		Sleep:  func(time.Duration) { m.Run(25, used) },
+		Sleep: func(time.Duration) {
+			if m != nil {
+				m.Run(25, used)
+			}
+		},
 		// 01:00:00 after boot.
 		Now: func() time.Time { return time.Unix(collecttest.BootTime+3600, 0) },
 		SteamName: func(id string) string {
@@ -136,6 +140,9 @@ func runEnv(t *testing.T, m *collecttest.Machine, used map[int]uint64, change fu
 			return map[string]t3.Thread{thread: {ID: thread, Title: "Make the build faster, please, without breaking anything", Model: "claude-opus-5-5"}}
 		},
 		ConfigPath: "/home/u/.config/pulse-monitor/config",
+	}
+	if m != nil {
+		env.Roots = m.Roots()
 	}
 	if change != nil {
 		change(&env)

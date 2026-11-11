@@ -1,0 +1,10 @@
+make -j8 in other, 11-07 09:05, rmmmm2
+exit 2, 1.2 s
+  cpu    2.4 s (2.1 user, 0.3 sys), 2.0 cores on average
+  peak   300 MB private memory (sampled every 500 ms); largest process 310 MB RSS (too short-lived to be sampled)
+  other  5.5 cores on average: wall time isn't comparable with a quiet run's
+  left   1 process still running: sccache (4821.kfx)
+  note   no cgroup could be made here, so the process tree was sampled: processes that detached are missed
+over time, 0.5 s per block
+  cores  ▆█▅  up to 2.2
+  memory ▃█▇  up to 300 MB

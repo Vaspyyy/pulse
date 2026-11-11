@@ -6,6 +6,15 @@ pulse: what is using this machine
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
 
+  pulse run [-n name] -- <command>  run a command and record what it uses
+  pulse runs                  the recorded runs
+  pulse show [run]            one run: numbers, processes, timeline
+  pulse diff [run] [run]      two runs side by side
+
+A run is named by its id (r7k2mq), the name given with -n, or "last".
+pulse diff alone compares the newest run with the one of the same
+command before it.
+
   -b <lines>   line budget (default 12)
 
 Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
