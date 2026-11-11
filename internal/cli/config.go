@@ -15,6 +15,11 @@ type Config struct {
 	GameEnv     []string // more environment variables that mark a game
 	GameProcess []string // more program names that are games
 	Theme       string   // the TUI's colours, "" for the default
+	// Links is "on", "off" or "" for: where the terminal is lumen.
+	Links string
+	// NotifyAfter is how many seconds a pulse run takes before its end is
+	// announced to the terminal; 0 never announces.
+	NotifyAfter float64
 }
 
 const configHelp = `The config file is %s
@@ -29,8 +34,13 @@ One "key = value" per line; # starts a comment. Every key is optional:
   game_process = name    a program that counts as a game; may be repeated
   game_env = NAME        an environment variable that marks a game's processes
                          (its value is shown as the game's name); may be repeated
-  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte or terminal
-                         (the TUI's t key switches and remembers it)
+  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte, terminal
+                         or lumen (the TUI's t key switches and remembers it);
+                         inside lumen the default is lumen
+  links = auto           handles, run ids and next: lines as links that put
+                         their command at the prompt: auto (inside lumen), on, off
+  notify_after = 10      a pulse run that took this many seconds tells the
+                         terminal when it ends; 0 never does
 `
 
 // ConfigPath is $XDG_CONFIG_HOME/pulse-monitor/config. Not "pulse", which
@@ -47,6 +57,7 @@ func ConfigPath(getenv func(string) string) string {
 // reported and skipped: a typo must not take the monitor down.
 func ParseConfig(text string) (cfg Config, problems []string) {
 	cfg.Thresholds = query.DefaultThresholds
+	cfg.NotifyAfter = 10
 	for i, line := range strings.Split(text, "\n") {
 		line, _, _ = strings.Cut(line, "#")
 		if line = strings.TrimSpace(line); line == "" {
@@ -92,6 +103,19 @@ func ParseConfig(text string) (cfg Config, problems []string) {
 			cfg.GameEnv = append(cfg.GameEnv, val)
 		case "theme":
 			cfg.Theme = val
+		case "links":
+			switch val {
+			case "on", "off":
+				cfg.Links = val
+			case "auto":
+				cfg.Links = ""
+			default:
+				bad("links = %s: want auto, on or off", val)
+			}
+		case "notify_after":
+			if n, ok := number(0, 86400); ok {
+				cfg.NotifyAfter = n
+			}
 		default:
 			bad("unknown key %q", key)
 		}

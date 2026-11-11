@@ -28,6 +28,7 @@ next: pulse top --by mem   the biggest memory users
 | `pulse top [--by cpu\|mem\|gpu]` | all groups that use something, heaviest first, with a handle each |
 | `pulse tree <handle\|pid\|name>` | a process, what it started, and the totals |
 | `pulse agents` | each T3 agent: thread title, model, CPU, memory, project; then the agents' memory against T3's limits |
+| `pulse watch -n <readings> [--every <seconds>] [--pids <pid,pid>] [--json]` | a load line every 3 seconds, and under it what each pid runs and uses |
 
 | `pulse run [-n name] -- <command>` | runs the command and records what it used |
 | `pulse runs` | the recorded runs, newest first |
@@ -88,4 +89,5 @@ next: pulse show r7k2mq   per-process breakdown and timeline
 - Linux only. A game is found by its launcher (or a marker from the config file), not by how it uses the GPU: something heavy on the GPU that isn't a game shows as `gpu draws …`.
 - Other users' processes show CPU and memory but can't be attributed to a game or agent.
 - On a terminal, `pulse` alone opens a full-screen monitor for people. You get the card, because your output is no terminal; `pulse -A` asks for the card by name. Never run `pulse tui`: it needs a terminal and doesn't exit.
+- `pulse watch` without `-n` never exits either: always give it a number of readings (`pulse watch -n 5 --every 2` watches for ten seconds).
 - Rates in the card, `top` and `tree` come from a quarter second, so a short spike can be missed or caught: for a build's real cost, measure the whole run with `pulse run`.

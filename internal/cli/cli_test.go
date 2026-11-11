@@ -98,6 +98,8 @@ func TestGolden(t *testing.T) {
 		{"tree-one", []string{"tree", "310"}},
 		{"agents", []string{"agents"}},
 		{"help", []string{"--help"}},
+		{"watch-json", []string{"watch", "--json", "-n", "2", "--pids", "300,190,310,99999"}},
+		{"watch", []string{"watch", "-n=2", "--every=1", "--pids", "300 190 99999"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

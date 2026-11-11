@@ -70,11 +70,29 @@ func runCommand(args []string, env Env, cfg Config) int {
 			head += " (" + r.Name + ")"
 		}
 	}
-	fmt.Fprintln(env.Stderr, head)
+	lk := env.links(cfg, env.StderrTerminal, nil, []string{r.ID})
+	fmt.Fprintln(env.Stderr, lk.line(head))
 	for _, l := range Summary(r) {
 		fmt.Fprintln(env.Stderr, l)
 	}
-	report{next: []next{{"pulse show " + r.ID, "per-process breakdown and timeline"}}}.print(env.Stderr, defaultBudget)
+	report{next: []next{{"pulse show " + r.ID, "per-process breakdown and timeline"}}}.print(env.Stderr, defaultBudget, lk)
+	// A run long enough to look away from says when it is over: the
+	// terminal marks the tab or shows a notification, as it sees fit.
+	if after := cfg.NotifyAfter; env.StderrTerminal && after > 0 && r.WallMS >= int64(after*1000) {
+		clean := func(s string) string {
+			return strings.Map(func(c rune) rune {
+				switch {
+				case c == ';':
+					return ','
+				case c < ' ' || c == 0x7f:
+					return ' '
+				}
+				return c
+			}, s)
+		}
+		fmt.Fprintf(env.Stderr, "\x1b]777;notify;%s;%s\x1b\\", clean(CommandLine(r, 48)),
+			clean(fmt.Sprintf("%s after %s, peak %s", ExitText(r), Dur(r.WallMS), query.Bytes(r.PeakPrivate))))
+	}
 	return r.Exit
 }
 
@@ -220,6 +238,9 @@ func runs(env Env) report {
 			Dur(r.WallMS), Dur(r.CPUMS()) + " cpu", query.Bytes(r.PeakPrivate), Place(r), r.Name, mark})
 	}
 	rep := report{body: table(rows, "llllrrrlll")}
+	for _, r := range all {
+		rep.ids = append(rep.ids, r.ID)
+	}
 	rep.next = append(rep.next, next{"pulse show " + all[0].ID, "the newest run in detail"})
 	if prev := earlier(all, all[0]); prev != nil {
 		rep.next = append(rep.next, next{"pulse diff " + prev.ID + " " + all[0].ID, "against the run of the same command before it"})
@@ -280,7 +301,7 @@ func show(env Env, ref string) (report, error) {
 	if r.Name != "" {
 		head += " (" + r.Name + ")"
 	}
-	rep := report{body: []string{head, ExitText(r) + ", " + Dur(r.WallMS)}}
+	rep := report{body: []string{head, ExitText(r) + ", " + Dur(r.WallMS)}, ids: []string{r.ID}}
 	rep.body = append(rep.body, Summary(r)...)
 
 	if len(r.Procs) > 0 {
@@ -345,7 +366,7 @@ func diff(env Env, refs []string) (report, error) {
 	}
 
 	head, rows, notes := DiffRows(a, b)
-	rep := report{body: append([]string{head}, table(rows, "llll")...)}
+	rep := report{body: append([]string{head}, table(rows, "llll")...), ids: []string{a.ID, b.ID}}
 	for _, n := range notes {
 		rep.body = append(rep.body, "note: "+n)
 	}

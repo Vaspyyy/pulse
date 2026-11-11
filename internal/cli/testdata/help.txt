@@ -7,6 +7,9 @@ pulse: what is using this machine
   pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
+  pulse watch [--json] [--every <seconds>] [--pids <pid,pid>] [-n <readings>]
+                              a reading every 3 seconds, one line each, until
+                              stopped: the load, and what each pid runs and uses
 
   pulse run [-n name] -- <command>  run a command and record what it uses
   pulse runs                  the recorded runs

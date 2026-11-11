@@ -50,10 +50,21 @@ ln -s "$PWD/skill" ~/.claude/skills/pulse   # from a checkout, for agents
 | `/` | filter by name; `esc` clears it |
 | `x` | end the selected process, after asking: `enter` sends SIGTERM, `shift+k` SIGKILL |
 | `space` | mark a run; two marked runs are compared |
-| `t` | the next theme: mocha, tokyo, gruvbox, latte, or the terminal's own colours |
+| `t` | the next theme: mocha, tokyo, gruvbox, latte, the terminal's own colours, or lumen |
 | `?` `q` | help, quit |
 
 The theme and the tab are remembered. `theme = gruvbox` in the config file sets the theme to start with, and with `NO_COLOR` set Pulse keeps to the terminal's colours.
+
+## In lumen
+
+[lumen](https://github.com/Vaspyyy/lumen) is the terminal made for these tools, and Pulse does a little more in it. Nothing here is needed elsewhere, and other terminals see the same output as before.
+
+- **The monitor wears lumen's colours** on lumen's own background, so the blur shows through. `t` still switches themes.
+- **Handles, run ids and `next:` lines are links.** A click puts the command at the prompt: `pulse tree 4821.kfx` for a handle, `pulse show r7k2mq` for a run, the line itself for a `next:`. It is put there, not run.
+- **A long `pulse run` says when it is over**, with a standard notification sequence, so a terminal can mark the tab you looked away from. Ten seconds counts as long; `notify_after` in the config file changes that.
+- **`pulse watch --json`** is what a terminal reads to show the load in its title bar and what each tab uses: one JSON line per reading, with a total for every pid it was asked about. A line `pids 4821 5133` on its standard input changes the pids without a new start.
+
+`links = on` in the config file turns the links on in another terminal that knows what to do with them. [docs/design.md](docs/design.md) has the exact formats.
 
 ## Commands
 
@@ -64,6 +75,7 @@ The theme and the tab are remembered. `theme = gruvbox` in the config file sets 
 | `pulse top [--by cpu\|mem\|gpu]` | the heaviest groups of processes |
 | `pulse tree <handle\|pid\|name>` | a process and what it started, with totals |
 | `pulse agents` | T3's agents: thread, model, CPU, memory, and their memory limits |
+| `pulse watch [--json] [--every s] [--pids p,p] [-n readings]` | a reading every 3 seconds, one line each, until stopped: the load, and what each pid runs and uses |
 | `pulse run [-n name] -- <command>` | runs a command and records what it used |
 | `pulse runs` | the recorded runs |
 | `pulse show [run]` | one run: numbers, processes, timeline |

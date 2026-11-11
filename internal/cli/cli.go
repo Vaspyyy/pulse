@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,9 +28,12 @@ const defaultBudget = 12
 type Env struct {
 	Roots  collect.Roots
 	UID    int
-	Stdin  io.Reader // for the command pulse run starts
+	Stdin  io.Reader // for the command pulse run starts, and pulse watch's pids
 	Stdout io.Writer
 	Stderr io.Writer
+	// Whether Stdout and Stderr are terminals: only a terminal gets links
+	// and notifications.
+	StdoutTerminal, StderrTerminal bool
 	// Getenv reads the environment; StateDir is where runs are kept.
 	Getenv   func(string) string
 	StateDir string
@@ -57,6 +62,9 @@ const usage = `pulse: what is using this machine
   pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
+  pulse watch [--json] [--every <seconds>] [--pids <pid,pid>] [-n <readings>]
+                              a reading every 3 seconds, one line each, until
+                              stopped: the load, and what each pid runs and uses
 
   pulse run [-n name] -- <command>  run a command and record what it uses
   pulse runs                  the recorded runs
@@ -94,6 +102,13 @@ func Run(args []string, env Env) int {
 		}
 		return runCommand(args[1:], env, cfg)
 	}
+	if len(args) > 0 && args[0] == "watch" {
+		cfg, problems := ParseConfig(env.Config)
+		for _, p := range problems {
+			fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
+		}
+		return watch(args[1:], env, cfg)
+	}
 	o, err := parse(args)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "pulse: %v\n", err)
@@ -106,6 +121,14 @@ func Run(args []string, env Env) int {
 	cfg, problems := ParseConfig(env.Config)
 	for _, p := range problems {
 		fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
+	}
+	// One view at most, and the links ask it which handles are real.
+	var seen *query.View
+	view := func(env Env, cfg Config) *query.View {
+		if seen == nil {
+			seen = view(env, cfg)
+		}
+		return seen
 	}
 	var r report
 	switch cmd {
@@ -159,7 +182,7 @@ func Run(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "pulse: %v\n", err)
 		return 1
 	}
-	r.print(env.Stdout, o.budget)
+	r.print(env.Stdout, o.budget, env.links(cfg, env.StdoutTerminal, seen, r.ids))
 	return 0
 }
 
@@ -243,13 +266,71 @@ func view(env Env, cfg Config) *query.View {
 type report struct {
 	body []string
 	next []next
+	ids  []string // the recorded runs the body names
+}
+
+// links turns what a report names into links that put a command at the
+// prompt when clicked: a handle shows its tree, a run its record, a next:
+// line itself (docs/design.md, "In lumen").
+type links struct {
+	view *query.View // tells a handle from text that only looks like one; may be nil
+	ids  []string    // the run ids that are real
+}
+
+// links returns the linker for a stream, nil where links don't belong:
+// anything but a terminal that understands them. That is lumen, or
+// whatever the config file says with links = on.
+func (env Env) links(cfg Config, terminal bool, v *query.View, ids []string) *links {
+	on := cfg.Links == "on" || cfg.Links != "off" && env.Getenv != nil && env.Getenv("TERM_PROGRAM") == "lumen"
+	if !on || !terminal {
+		return nil
+	}
+	return &links{view: v, ids: ids}
+}
+
+// A handle (4821.kfx) or a run id (r7k2mq), by their looks.
+var linkable = regexp.MustCompile(`\b(?:[0-9]+\.[a-hjkmnp-z]{3}|r[a-hjkmnp-z2-9]{5})\b`)
+
+// promptLink is text as a link that puts cmd at the prompt.
+func promptLink(cmd, text string) string {
+	return "\x1b]8;;lumen-prompt:" + url.PathEscape(cmd) + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// line links the handles and run ids in a line of a report.
+func (l *links) line(s string) string {
+	if l == nil {
+		return s
+	}
+	return linkable.ReplaceAllStringFunc(s, func(tok string) string {
+		if tok[0] == 'r' {
+			if slices.Contains(l.ids, tok) {
+				return promptLink("pulse show "+tok, tok)
+			}
+			return tok
+		}
+		if l.view == nil {
+			return tok
+		}
+		if _, err := l.view.Find(tok); err != nil {
+			return tok
+		}
+		return promptLink("pulse tree "+tok, tok)
+	})
+}
+
+// command links a next: line's command to itself.
+func (l *links) command(cmd string) string {
+	if l == nil || strings.ContainsAny(cmd, "<>") { // a placeholder isn't a command yet
+		return cmd
+	}
+	return promptLink(cmd, cmd)
 }
 
 type next struct{ cmd, why string }
 
 // print writes the report within budget lines. When the body doesn't fit,
 // its end is cut and a line says how to see all of it.
-func (r report) print(w io.Writer, budget int) {
+func (r report) print(w io.Writer, budget int, l *links) {
 	r.next = r.next[:min(len(r.next), 3)]
 	body := r.body
 	// Whatever the budget, the first line and the note about the cut stay.
@@ -257,15 +338,15 @@ func (r report) print(w io.Writer, budget int) {
 		keep := room - 1
 		body = append(body[:keep:keep], fmt.Sprintf("… %d more lines; -b %d shows all", len(r.body)-keep, len(r.body)+len(r.next)))
 	}
-	for _, l := range body {
-		fmt.Fprintln(w, strings.TrimRight(l, " "))
+	for _, line := range body {
+		fmt.Fprintln(w, l.line(strings.TrimRight(line, " ")))
 	}
 	width := 0
 	for _, n := range r.next {
 		width = max(width, len(n.cmd))
 	}
 	for _, n := range r.next {
-		fmt.Fprintf(w, "next: %-*s   %s\n", width, n.cmd, n.why)
+		fmt.Fprintf(w, "next: %s%s   %s\n", l.command(n.cmd), strings.Repeat(" ", width-len(n.cmd)), n.why)
 	}
 }
 

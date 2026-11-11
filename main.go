@@ -51,6 +51,7 @@ func main() {
 			Store:     record.Store{Dir: filepath.Join(stateDir, "runs")},
 			StateFile: filepath.Join(stateDir, "tui.json"),
 			NoColor:   os.Getenv("NO_COLOR") != "",
+			Terminal:  os.Getenv("TERM_PROGRAM"),
 		})
 		for _, p := range problems {
 			fmt.Fprintf(os.Stderr, "pulse: %s: %s\n", configPath, p)
@@ -62,19 +63,21 @@ func main() {
 		return
 	}
 	os.Exit(cli.Run(args, cli.Env{
-		Roots:      roots,
-		GPU:        readGPU,
-		Config:     string(config),
-		ConfigPath: configPath,
-		UID:        os.Getuid(),
-		Stdin:      os.Stdin,
-		Getenv:     os.Getenv,
-		StateDir:   stateDir,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
-		Sleep:      time.Sleep,
-		SteamName:  steam,
-		Threads:    threads,
+		Roots:          roots,
+		GPU:            readGPU,
+		Config:         string(config),
+		ConfigPath:     configPath,
+		UID:            os.Getuid(),
+		Stdin:          os.Stdin,
+		Getenv:         os.Getenv,
+		StateDir:       stateDir,
+		Stdout:         os.Stdout,
+		Stderr:         os.Stderr,
+		StdoutTerminal: terminal(os.Stdout),
+		StderrTerminal: terminal(os.Stderr),
+		Sleep:          time.Sleep,
+		SteamName:      steam,
+		Threads:        threads,
 	}))
 }
 

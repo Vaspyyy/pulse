@@ -383,6 +383,39 @@ func TestState(t *testing.T) {
 	}
 }
 
+// TestLumenTheme: inside lumen the monitor starts in lumen's colours,
+// unless the config file or the user chose others.
+func TestLumenTheme(t *testing.T) {
+	s := open(t, 120, 38)
+	o := s.m.o
+	o.Terminal = "lumen"
+	m := newModel(o)
+	if m.theme.Name != "lumen" || m.theme.Bg != nil {
+		t.Fatalf("in lumen: theme %s, background %v; want lumen on the terminal's own", m.theme.Name, m.theme.Bg)
+	}
+	// Changing the tab remembers the tab, not a theme nobody picked.
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 38})
+	m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	o.Terminal = ""
+	if again := newModel(o); again.tab != tabProcs || again.theme.Name != Themes[0].Name {
+		t.Errorf("outside lumen afterwards: tab %d, theme %s", again.tab, again.theme.Name)
+	}
+	// A theme picked with t stays, in lumen too.
+	m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	o.Terminal = "lumen"
+	if again := newModel(o); again.theme.Name != Themes[0].Name {
+		t.Errorf("after t in lumen: theme %s, want %s", again.theme.Name, Themes[0].Name)
+	}
+	o.StateFile, o.Config.Theme = "", "tokyo"
+	if got := newModel(o).theme.Name; got != "tokyo" {
+		t.Errorf("theme = tokyo in lumen gave %s", got)
+	}
+	o.Config.Theme, o.NoColor = "", true
+	if got := newModel(o).theme.Name; got != "terminal" {
+		t.Errorf("NO_COLOR in lumen gave %s", got)
+	}
+}
+
 func TestGraphs(t *testing.T) {
 	m := &model{theme: themeNamed("terminal")}
 	vals := []float64{0, 0.25, 0.5, 1}

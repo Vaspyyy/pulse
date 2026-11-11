@@ -1,0 +1,8 @@
+09:00:00  busy: a game (Hades) uses 68% GPU, 2.1 cores and 3.7 GB; cpu at 8.0 of 16 cores, most from t3code agents ×2 (5.6 cores)
+          300.bft: zsh -c, 5.6 cores, 4.1 GB
+          190.xnz: reaper, 2.1 cores, 3.9 GB
+          99999: gone
+09:00:00  busy: a game (Hades) uses 68% GPU, 2.1 cores and 3.7 GB; cpu at 8.0 of 16 cores, most from t3code agents ×2 (5.6 cores)
+          300.bft: zsh -c, 5.6 cores, 4.1 GB
+          190.xnz: reaper, 2.1 cores, 3.9 GB
+          99999: gone

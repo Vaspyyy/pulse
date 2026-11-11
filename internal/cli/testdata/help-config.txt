@@ -10,5 +10,10 @@ One "key = value" per line; # starts a comment. Every key is optional:
   game_process = name    a program that counts as a game; may be repeated
   game_env = NAME        an environment variable that marks a game's processes
                          (its value is shown as the game's name); may be repeated
-  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte or terminal
-                         (the TUI's t key switches and remembers it)
+  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte, terminal
+                         or lumen (the TUI's t key switches and remembers it);
+                         inside lumen the default is lumen
+  links = auto           handles, run ids and next: lines as links that put
+                         their command at the prompt: auto (inside lumen), on, off
+  notify_after = 10      a pulse run that took this many seconds tells the
+                         terminal when it ends; 0 never does

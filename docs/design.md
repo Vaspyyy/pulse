@@ -394,6 +394,67 @@ Measured on 2026-11-11 with `PULSE_PROFILE` (a CPU and heap profile of the runni
 - **What is left** is mostly not Pulse's to save: six tenths of it is the kernel writing `/proc/<pid>/stat` for every process (about 8 µs each, more for processes with many threads), a tenth NVML, a tenth T3's cgroup files. Drawing a frame takes half a millisecond. The 1 % in the budget below would need the process list read less often than the graphs (every 2 or 3 s, as btop and htop do by default), which the collector can't do yet: a snapshot is all or nothing.
 - **Memory: 52 MB resident, of which about 27 MB is NVIDIA's library** (it maps `libcuda` and keeps 20 MB of its own). Pulse's own share is about 18 MB: 12 MB of Go heap, the rest the binary. Without an NVIDIA GPU the 30 MB budget holds.
 
+## In lumen
+
+[lumen](https://github.com/Vaspyyy/lumen) is the terminal built for the five tools (Rust, GPUI, Alacritty's terminal core). The rule on both sides: the tools print standard output that works everywhere, and lumen understands more of it. So nothing below makes Pulse depend on lumen, and what another terminal can't use, it doesn't get.
+
+Pulse knows it runs in lumen by `TERM_PROGRAM=lumen`, which lumen sets for what it starts. **Pulse's halves are built (2026-11-11); lumen's are not.**
+
+**1. `pulse watch --json`: the load and each tab's use, for the title bar and the tabs**
+
+`pulse watch [--json] [--every <seconds>] [--pids <pid,pid>] [-n <readings>]` takes a reading every 3 seconds (0.25 to 3600) and prints one line each, the first after a quarter second. It ends after `-n` readings, or when nobody reads its output any more. With `--json` a line is one object (`cli.Reading`):
+
+```json
+{"v":1,"at":"2026-11-11T03:30:00+01:00","window_ms":3000,
+ "busy":true,"reasons":["a game (Hades) uses 68% GPU, 2.1 cores and 3.7 GB"],
+ "line":"busy: a game (Hades) uses 68% GPU, 2.1 cores and 3.7 GB","games":["Hades"],
+ "cpu":{"cores":8.04,"of":16,"temp":61.25},
+ "mem":{"used":25769803776,"total":66571993088,"pressure":0},
+ "gpus":[{"name":"RTX 3070","util":71,"load":70,"power":168,"power_limit":240,"vram_used":6227492864,"vram_total":8589934592,"temp":64}],
+ "pids":[{"pid":4821,"handle":"4821.kfx","cores":5.56,"memory":4393533440,"processes":10,"job":"cargo build","top":"rustc syn"},
+         {"pid":5133,"gone":true,"cores":0,"memory":0,"processes":0}]}
+```
+
+- Sizes are bytes, `cores` is CPUs' worth of work, `load` is a GPU's power draw as a percent of its limit (the number the verdict uses), `pressure` the memory pressure in percent.
+- `pids` answers for the pids asked about, in that order: the process and everything below it. For a terminal that is a pane's shell. `job` is the heaviest thing the shell started, counted with all below it (what the tab runs), `top` the heaviest single process. Both are missing for a shell that runs nothing.
+- **The pids change without a new start:** a line `pids 4821 5133` on standard input (commas work too; `pids` alone asks about none) replaces them from the next reading on. The end of standard input changes nothing.
+- It reads the same as the monitor does, so it costs the same per reading: at 3 seconds, about 0.7 % of a core.
+- Fields may be added; a reader ignores what it doesn't know. `v` changes if a field's meaning does.
+
+**2. Links that put a command at the prompt**
+
+Where its output is a terminal and the terminal is lumen (or the config file says `links = on`), Pulse wraps what it names in OSC 8 links:
+
+```
+ESC ] 8 ; ; lumen-prompt:<the command, percent-encoded> ESC \  text  ESC ] 8 ; ; ESC \
+```
+
+- A handle links to `pulse tree <handle>`, a run id to `pulse show <id>`, the command of a `next:` line to itself (unless it holds a `<placeholder>`). `pulse run` links the id in its summary on stderr.
+- Only what is real is linked: a handle that the reading has, a run that the report names. Text that only has the form of one ("reaper") isn't.
+- Without the links the output is the same to the byte, so they cost an agent nothing: its output is no terminal, and it never gets them.
+- **What lumen does with one:** put the decoded text at the shell's prompt, and leave Enter to the user. A link must never run anything by being clicked: what a program prints isn't trusted the way what the user types is. A scheme of its own, not `file:` or a command line, keeps other terminals from guessing wrong; they don't get these links at all.
+
+**3. A notification when a long run ends**
+
+A `pulse run` that took at least `notify_after` seconds (10; 0 turns it off) writes, as the last thing on stderr and only to a terminal:
+
+```
+ESC ] 777 ; notify ; <command> ; <exit, time and peak memory> ESC \
+```
+
+for example `cargo test` and `exit 0 after 48.2 s, peak 8.9 GB`. OSC 777 is what foot, Ghostty, WezTerm and others already show as a desktop notification; Alacritty and xterm ignore it. lumen is free to do better: mark the tab, and notify only when the tab isn't the one being looked at. Semicolons in the texts become commas, since they separate the fields.
+
+**4. The monitor's lumen theme**
+
+A sixth theme, `lumen`: lumen's default colours (a night sky with a warm lamp in it), with the lamp's amber for what is active and the terminal's own background under it, so lumen's blur shows through. Inside lumen it is the theme to start with, unless the config file names one or the user picked one with `t`. Only a theme picked with `t` is remembered now: before, the first tab change wrote the default down and nothing else could ever be the default again.
+
+**lumen's halves, to be built there**
+
+- Title bar: start `pulse watch --json --every 3`, show a dot for `busy` with `reasons` on hover; tabs: write `pids <shell pids>` whenever panes come and go, and show `job`, `cores` and `memory` for each.
+- Links: recognise `lumen-prompt:` on click and type the text at the prompt.
+- Notifications: catch OSC 777 (Alacritty's core drops it), mark the tab.
+- Later, with command blocks: a cgroup per pane, and each command's exact CPU time and peak memory beside its pass or fail mark, as `pulse run` measures them. And a key that drops the monitor down over the window.
+
 ## Prism integration
 
 Optional by construction. Outside a git repo, or with `--no-context` or `PRISM_NO_CONTEXT=1`, Pulse is a plain system monitor, and the only difference is the missing "this repo" section. Context follows Prism's rules: it may rank, mark and add, never hide a process that would show without it.

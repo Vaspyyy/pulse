@@ -37,6 +37,9 @@ type Options struct {
 	// StateFile remembers the theme and the tab between starts. "" for no
 	// memory.
 	StateFile string
+	// Terminal is the terminal's name, as TERM_PROGRAM has it. In "lumen"
+	// the theme to start with is lumen's.
+	Terminal string
 	// NoColor is NO_COLOR: the terminal's own colours, and Pulse paints no
 	// background.
 	NoColor bool
@@ -69,10 +72,11 @@ var tabNames = []string{"Overview", "Processes", "Agents", "Runs"}
 const firstWindow = 250 * time.Millisecond // until the second reading, which gives the first rates
 
 type model struct {
-	o     Options
-	theme Theme
-	w, h  int
-	tab   tab
+	o      Options
+	theme  Theme
+	picked string // the theme the user chose with t, "" for none yet
+	w, h   int
+	tab    tab
 
 	c        *collect.Collector
 	prev     *collect.Snapshot
@@ -93,10 +97,12 @@ type model struct {
 	zones   []zone
 }
 
-// state is what is remembered between starts.
+// state is what is remembered between starts. The theme is only in it
+// once the user picked one with t: until then the config file and the
+// terminal decide.
 type state struct {
-	Theme string `json:"theme"`
-	Tab   int    `json:"tab"`
+	Picked string `json:"picked,omitempty"`
+	Tab    int    `json:"tab"`
 }
 
 func newModel(o Options) *model {
@@ -110,6 +116,9 @@ func newModel(o Options) *model {
 		o.Kill = syscall.Kill
 	}
 	m := &model{o: o, theme: themeNamed(o.Config.Theme), c: collect.New(o.Roots)}
+	if o.Config.Theme == "" && o.Terminal == "lumen" {
+		m.theme = themeNamed("lumen")
+	}
 	if o.NoColor {
 		m.theme = themeNamed("terminal")
 	}
@@ -122,8 +131,8 @@ func newModel(o Options) *model {
 	if b, err := os.ReadFile(o.StateFile); err == nil && o.StateFile != "" {
 		var st state
 		if json.Unmarshal(b, &st) == nil {
-			if st.Theme != "" && !o.NoColor {
-				m.theme = themeNamed(st.Theme)
+			if st.Picked != "" && !o.NoColor {
+				m.theme, m.picked = themeNamed(st.Picked), st.Picked
 			}
 			if st.Tab >= 0 && st.Tab < len(tabNames) {
 				m.tab = tab(st.Tab)
@@ -137,7 +146,7 @@ func (m *model) saveState() {
 	if m.o.StateFile == "" {
 		return
 	}
-	b, _ := json.Marshal(state{Theme: m.theme.Name, Tab: int(m.tab)})
+	b, _ := json.Marshal(state{Picked: m.picked, Tab: int(m.tab)})
 	if os.MkdirAll(filepath.Dir(m.o.StateFile), 0o700) == nil {
 		_ = os.WriteFile(m.o.StateFile, b, 0o600)
 	}
@@ -295,6 +304,7 @@ func (m *model) key(k tea.KeyPressMsg) tea.Cmd {
 				break
 			}
 		}
+		m.picked = m.theme.Name
 		m.saveState()
 		m.say("theme: " + m.theme.Name)
 	case "up", "k":
@@ -421,7 +431,10 @@ func (m *model) View() tea.View {
 // clock.
 func (m *model) header() string {
 	t := m.theme
-	onAccent := t.Bg
+	onAccent := t.Ink
+	if onAccent == nil {
+		onAccent = t.Bg
+	}
 	if onAccent == nil {
 		onAccent = lipgloss.Color("0")
 	}

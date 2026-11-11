@@ -18,6 +18,8 @@ type Theme struct {
 	Text, Sub, Dim, Line, Sel color.Color
 	// Accent marks what is active: the tab, a panel's title, a key.
 	Accent, Accent2 color.Color
+	// Ink is the text on an accent, nil for the background's colour.
+	Ink             color.Color
 	Good, Warn, Bad color.Color
 	// The gradients colour graphs from their floor to their ceiling.
 	CPU, Mem, GPU, Net, Disk []color.Color
@@ -90,6 +92,20 @@ var Themes = []Theme{
 		GPU:  hex("10", "11"),
 		Net:  hex("14", "12"),
 		Disk: hex("13"),
+	},
+	{
+		// lumen's own look, a night sky with a warm lamp in it: its colours,
+		// on the terminal's background, so that the blur shows through. It
+		// is the default inside lumen.
+		Name: "lumen",
+		Text: c("#e4e1ee"), Sub: c("#b7b2cb"), Dim: c("#7b7693"), Line: c("#4b4662"), Sel: c("#322d45"),
+		Accent: c("#ffc97a"), Accent2: c("#c9a4ff"), Ink: c("#12111a"),
+		Good: c("#8fdfa8"), Warn: c("#ffd08a"), Bad: c("#f27a93"),
+		CPU:  hex("#8cb4ff", "#c9a4ff", "#ffc97a"),
+		Mem:  hex("#7fd9e6", "#8cb4ff"),
+		GPU:  hex("#8fdfa8", "#ffd08a", "#ff9d7a"),
+		Net:  hex("#7fd9e6", "#8cb4ff"),
+		Disk: hex("#c9a4ff", "#f27a93"),
 	},
 }
 
