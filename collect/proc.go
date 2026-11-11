@@ -12,7 +12,8 @@ import (
 
 // Markers are the only environment variables the collector keeps: the
 // ones that say which agent session or game a process belongs to. Every
-// other value is dropped as soon as the environment has been read.
+// other value is dropped as soon as the environment has been read. A
+// Collector starts with these and can be given more (Collector.Markers).
 var Markers = []string{
 	"T3CODE_THREAD_ID", "CLAUDE_CODE_SESSION_ID", "PRISM_SESSION",
 	"SteamAppId", "SteamGameId",
@@ -128,7 +129,7 @@ func (c *Collector) readStatic(dir string, kernel bool) *static {
 		st.envRead = true
 		for kv := range strings.SplitSeq(string(b), "\x00") {
 			k, v, ok := strings.Cut(kv, "=")
-			if !ok || !slices.Contains(Markers, k) {
+			if !ok || !slices.Contains(c.Markers, k) {
 				continue
 			}
 			if st.env == nil {

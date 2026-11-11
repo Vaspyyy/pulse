@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Vaspyyy/pulse/collect"
+	"github.com/Vaspyyy/pulse/collect/gpu"
 	"github.com/Vaspyyy/pulse/collect/t3"
 )
 
@@ -22,6 +23,7 @@ type View struct {
 	Procs  []Proc     // ascending by pid
 	T3     *t3.Layout // nil when T3 runs no agents here
 	Games  []Game
+	GPUs   []gpu.Device // empty when there's no GPU reading
 
 	byPID    map[int]int // index into Procs
 	children map[int][]int
@@ -31,6 +33,8 @@ type View struct {
 type Proc struct {
 	*collect.Process
 	Cores float64 // CPUs it kept busy over the window
+	GPU   float64 // percent of the GPUs it kept busy, as the driver sampled it
+	VRAM  uint64  // bytes of GPU memory
 	Game  int     // index into View.Games, or -1
 	Scope int     // index into View.T3.Scopes of the agent it runs in, or -1
 }
@@ -40,6 +44,12 @@ type Options struct {
 	UID int
 	// SteamName returns a Steam app's name, "" when unknown. May be nil.
 	SteamName func(appID string) string
+	// GPUs is the GPU reading taken with cur, if any.
+	GPUs []gpu.Device
+	// GameEnv and GameProcess are more game markers than the built-in
+	// ones: environment variables (which the collector must have kept)
+	// and program names.
+	GameEnv, GameProcess []string
 }
 
 // NewView compares prev with cur. prev may be nil: then there are no rates.
@@ -81,7 +91,16 @@ func NewView(prev, cur *collect.Snapshot, roots collect.Roots, o Options) *View 
 			v.Procs[i].Scope = scopeOf(l, v.Procs[i].Cgroup)
 		}
 	}
-	v.findGames(o.SteamName)
+	v.GPUs = o.GPUs
+	for _, d := range o.GPUs {
+		for _, g := range d.Procs {
+			if p := v.Proc(g.PID); p != nil {
+				p.GPU += g.Util
+				p.VRAM += g.Mem
+			}
+		}
+	}
+	v.findGames(o)
 	return v
 }
 
@@ -172,13 +191,25 @@ func (v *View) Find(arg string) ([]*Proc, error) {
 type Total struct {
 	Count   int
 	Cores   float64
-	Private uint64 // bytes; shared libraries and files aren't summed
+	Private uint64  // bytes; shared libraries and files aren't summed
+	GPU     float64 // percent of the GPUs
+	VRAM    uint64  // bytes
 }
 
 func (t *Total) add(p *Proc) {
 	t.Count++
 	t.Cores += p.Cores
 	t.Private += p.Private()
+	t.GPU += p.GPU
+	t.VRAM += p.VRAM
+}
+
+func (t *Total) merge(o Total) {
+	t.Count += o.Count
+	t.Cores += o.Cores
+	t.Private += o.Private
+	t.GPU += o.GPU
+	t.VRAM += o.VRAM
 }
 
 func (v *View) total(root *Proc) Total {

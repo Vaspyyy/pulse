@@ -1,0 +1,5 @@
+reaper SteamLaunch AppId=1145360 -- proton run 200.yqw, running 56 min
+total 3 processes, 2.1 cores, 3.7 GB private memory (shared libraries and files not summed)
+      68% of the GPU, 5.1 GB of GPU memory
+├─ Hades.exe   2.0 cores  4.0 GB  68% gpu  5.1 GB vram  201.hds
+└─ wineserver  0.1 cores   30 MB                        202.tyy

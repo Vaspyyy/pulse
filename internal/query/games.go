@@ -2,14 +2,15 @@ package query
 
 import (
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
 
 // Game is a running game and the processes that belong to it.
 type Game struct {
-	Launcher string // steam, heroic or gamescope
-	ID       string // Steam's app id, Heroic's app name, or gamescope's pid
+	Launcher string // steam, heroic, gamescope, or env and process for configured markers
+	ID       string // Steam's app id, Heroic's app name, a marker's value, or a pid
 	Name     string // what to call it
 	Total    Total
 }
@@ -18,7 +19,8 @@ type Game struct {
 // "The load verdict"): a process that carries a marker, and everything
 // below it. Agents' own processes never count: a test that an agent runs
 // under a headless gamescope isn't somebody playing.
-func (v *View) findGames(steamName func(string) string) {
+func (v *View) findGames(o Options) {
+	steamName := o.SteamName
 	index := map[string]int{}
 	game := func(launcher, id, name string) int {
 		key := launcher + ":" + id
@@ -59,6 +61,14 @@ func (v *View) findGames(steamName func(string) string) {
 				}
 			}
 			return game("gamescope", strconv.Itoa(p.PID), name)
+		}
+		for _, k := range o.GameEnv {
+			if val := p.Env[k]; val != "" {
+				return game("env", k+"="+val, val)
+			}
+		}
+		if name := Name(p); slices.Contains(o.GameProcess, name) || slices.Contains(o.GameProcess, p.Comm) {
+			return game("process", strconv.Itoa(p.PID), name)
 		}
 		return -1
 	}

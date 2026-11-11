@@ -3,17 +3,20 @@ package query
 import (
 	"fmt"
 	"strings"
+
+	"github.com/Vaspyyy/pulse/collect/gpu"
 )
 
 // Thresholds say when the machine counts as busy.
 type Thresholds struct {
 	CPUShare      float64 // busy above this share of all CPUs
+	GPULoad       float64 // busy above this GPU load in percent (gpu.Device.Load), unless a game explains it
 	MemPressure   float64 // busy above this "some avg10" memory pressure, in percent
 	AgentHeadroom uint64  // busy when T3's agents are this close to being throttled, in bytes
 }
 
 // DefaultThresholds are the ones in docs/design.md, "The load verdict".
-var DefaultThresholds = Thresholds{CPUShare: 0.5, MemPressure: 10, AgentHeadroom: 2 << 30}
+var DefaultThresholds = Thresholds{CPUShare: 0.5, GPULoad: 30, MemPressure: 10, AgentHeadroom: 2 << 30}
 
 // Load is the verdict on whether the machine is busy, with its reasons.
 type Load struct {
@@ -36,7 +39,11 @@ func (l Load) Line() string {
 func (v *View) Load(th Thresholds) Load {
 	var l Load
 	for _, g := range v.Games {
-		l.Reasons = append(l.Reasons, fmt.Sprintf("a game (%s) uses %s and %s", g.Name, Cores(g.Total.Cores), Bytes(g.Total.Private)))
+		gpu := ""
+		if g.Total.GPU >= 1 {
+			gpu = fmt.Sprintf("%.0f%% GPU, ", g.Total.GPU)
+		}
+		l.Reasons = append(l.Reasons, fmt.Sprintf("a game (%s) uses %s%s and %s", g.Name, gpu, Cores(g.Total.Cores), Bytes(g.Total.Private)))
 	}
 	if v.Window > 0 && v.Cores > th.CPUShare*float64(v.NCPU) {
 		r := fmt.Sprintf("cpu at %.1f of %d cores", v.Cores, v.NCPU)
@@ -45,6 +52,23 @@ func (v *View) Load(th Thresholds) Load {
 				r += fmt.Sprintf(", most from %s (%s)", g.Label, Cores(g.Total.Cores))
 				break
 			}
+		}
+		l.Reasons = append(l.Reasons, r)
+	}
+	for _, d := range v.GPUs {
+		// A game is a reason already, and the likely cause.
+		if load, ok := d.Load(); !ok || load <= th.GPULoad || len(v.Games) > 0 {
+			continue
+		}
+		r := "gpu " + gpuLoad(d)
+		for _, g := range v.Groups("gpu") {
+			if g.Kind == "game" {
+				continue
+			}
+			if g.Total.GPU >= 1 {
+				r += fmt.Sprintf(", most from %s (%.0f%%)", g.Label, g.Total.GPU)
+			}
+			break
 		}
 		l.Reasons = append(l.Reasons, r)
 	}
@@ -65,9 +89,23 @@ func (v *View) Load(th Thresholds) Load {
 		if v.Window > 0 {
 			cpu = fmt.Sprintf("cpu %.1f of %d cores", v.Cores, v.NCPU)
 		}
+		for _, d := range v.GPUs {
+			if _, ok := d.Load(); ok {
+				cpu += ", gpu " + gpuLoad(d)
+			}
+		}
 		l.Quiet = cpu + ", no game, no memory pressure"
 	}
 	return l
+}
+
+// gpuLoad words a GPU's load: its power draw where that's known, which
+// holds at any clock speed, else its utilisation.
+func gpuLoad(d gpu.Device) string {
+	if d.Power > 0 && d.PowerLimit > 0 {
+		return fmt.Sprintf("draws %.0f of %.0f W", d.Power, d.PowerLimit)
+	}
+	return fmt.Sprintf("at %.0f%%", d.Util)
 }
 
 // Cores formats a CPU rate.

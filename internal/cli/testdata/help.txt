@@ -2,11 +2,14 @@ pulse: what is using this machine
 
   pulse                       the card: load verdict, machine, top groups
   pulse load                  one line: quiet, or busy with the reasons
-  pulse top [--by cpu|mem]    the heaviest groups of processes
+  pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
 
   -b <lines>   line budget (default 12)
+
+Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
+more game markers can be set in the config file (see pulse help config).
 
 A handle is a pid, a dot and three letters (4821.kfx): it names one
 process for good, and the pid in front works with kill and strace.

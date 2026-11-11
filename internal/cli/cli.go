@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Vaspyyy/pulse/collect"
+	"github.com/Vaspyyy/pulse/collect/gpu"
 	"github.com/Vaspyyy/pulse/collect/t3"
 	"github.com/Vaspyyy/pulse/internal/query"
 )
@@ -32,6 +34,11 @@ type Env struct {
 	Now func() time.Time
 	// SteamName returns a Steam app's name, "" when unknown. May be nil.
 	SteamName func(appID string) string
+	// GPU reads the GPUs. May be nil: then there is no GPU reading.
+	GPU func() []gpu.Device
+	// Config is the config file's content, "" when there is none, and
+	// ConfigPath where it was looked for.
+	Config, ConfigPath string
 	// Threads returns what T3 says about threads, by id; ids it doesn't
 	// answer for in time are left out. May be nil.
 	Threads func(ids []string) map[string]t3.Thread
@@ -41,11 +48,14 @@ const usage = `pulse: what is using this machine
 
   pulse                       the card: load verdict, machine, top groups
   pulse load                  one line: quiet, or busy with the reasons
-  pulse top [--by cpu|mem]    the heaviest groups of processes
+  pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals
   pulse agents                T3's agents: thread, CPU, memory, limits
 
   -b <lines>   line budget (default 12)
+
+Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
+more game markers can be set in the config file (see pulse help config).
 
 A handle is a pid, a dot and three letters (4821.kfx): it names one
 process for good, and the pid in front works with kill and strace.
@@ -69,25 +79,33 @@ func Run(args []string, env Env) int {
 	if len(o.args) > 0 {
 		cmd, o.args = o.args[0], o.args[1:]
 	}
+	cfg, problems := parseConfig(env.Config)
+	for _, p := range problems {
+		fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
+	}
 	var r report
 	switch cmd {
 	case "help":
+		if len(o.args) == 1 && o.args[0] == "config" {
+			fmt.Fprintf(env.Stdout, configHelp, env.ConfigPath)
+			return 0
+		}
 		fmt.Fprint(env.Stdout, usage)
 		return 0
 	case "":
-		r = card(view(env))
+		r = card(view(env, cfg), cfg)
 	case "load":
-		r.body = []string{view(env).Load(query.DefaultThresholds).Line()}
+		r.body = []string{view(env, cfg).Load(cfg.Thresholds).Line()}
 	case "top":
-		r = top(view(env), o.by)
+		r = top(view(env, cfg), o.by)
 	case "tree":
 		if len(o.args) != 1 {
 			fmt.Fprintln(env.Stderr, "pulse: tree takes one handle, pid or name")
 			return 2
 		}
-		r, err = tree(view(env), o.args[0])
+		r, err = tree(view(env, cfg), o.args[0])
 	case "agents":
-		r, err = agents(view(env), env)
+		r, err = agents(view(env, cfg), env)
 	default:
 		fmt.Fprintf(env.Stderr, "pulse: unknown command %q; pulse help lists them\n", cmd)
 		return 2
@@ -132,8 +150,8 @@ func parse(args []string) (options, error) {
 			if err != nil {
 				return o, err
 			}
-			if v != "cpu" && v != "mem" {
-				return o, fmt.Errorf("--by %s: want cpu or mem", v)
+			if v != "cpu" && v != "mem" && v != "gpu" {
+				return o, fmt.Errorf("--by %s: want cpu, mem or gpu", v)
 			}
 			o.by = v
 		case "-A":
@@ -151,15 +169,29 @@ func parse(args []string) (options, error) {
 	return o, nil
 }
 
-// view takes two readings a window apart.
-func view(env Env) *query.View {
+// view takes two readings a window apart, and reads the GPUs meanwhile:
+// their driver averages over its own sample period, so one reading does.
+func view(env Env, cfg config) *query.View {
 	c := collect.New(env.Roots)
 	if env.Now != nil {
 		c.Now = env.Now
 	}
+	c.Markers = append(slices.Clone(c.Markers), cfg.GameEnv...)
+	gpus := make(chan []gpu.Device, 1)
+	go func() {
+		if env.GPU == nil {
+			gpus <- nil
+			return
+		}
+		gpus <- env.GPU()
+	}()
 	first := c.Snapshot()
 	env.Sleep(Window)
-	return query.NewView(first, c.Snapshot(), env.Roots, query.Options{UID: env.UID, SteamName: env.SteamName})
+	second := c.Snapshot()
+	return query.NewView(first, second, env.Roots, query.Options{
+		UID: env.UID, SteamName: env.SteamName, GPUs: <-gpus,
+		GameEnv: cfg.GameEnv, GameProcess: cfg.GameProcess,
+	})
 }
 
 // report is a command's output: the body, then the next: lines.
@@ -199,10 +231,28 @@ func machine(v *query.View) string {
 	if p := v.Snap.Pressure.Memory; p >= 1 {
 		pressure = fmt.Sprintf("pressure %.0f%%", p)
 	}
-	s := fmt.Sprintf("cpu %.1f/%d cores · mem %.1f/%.1f GB, %s", v.Cores, v.NCPU,
-		gb(m.Total-min(m.Available, m.Total)), gb(m.Total), pressure)
+	s := fmt.Sprintf("cpu %.1f/%d cores", v.Cores, v.NCPU)
+	if t := v.Snap.CPUTemp; t > 0 {
+		s += fmt.Sprintf(" %.0f°C", t)
+	}
+	s += fmt.Sprintf(" · mem %.1f/%.1f GB, %s", gb(m.Total-min(m.Available, m.Total)), gb(m.Total), pressure)
 	if used := m.SwapTotal - min(m.SwapFree, m.SwapTotal); used > 0 {
 		s += " · swap " + query.Bytes(used)
+	}
+	for _, d := range v.GPUs {
+		s += " · gpu " + d.Name
+		if d.Util >= 0 {
+			s += fmt.Sprintf(" %.0f%%", d.Util)
+		}
+		if d.Power > 0 && d.PowerLimit > 0 {
+			s += fmt.Sprintf(" at %.0f/%.0f W", d.Power, d.PowerLimit)
+		}
+		if d.MemTotal > 0 {
+			s += fmt.Sprintf(", %.1f/%.1f GB", gb(d.MemUsed), gb(d.MemTotal))
+		}
+		if d.Temp > 0 {
+			s += fmt.Sprintf(", %.0f°C", d.Temp)
+		}
 	}
 	return s
 }
@@ -240,15 +290,58 @@ func table(rows [][]string, align string) []string {
 	return out
 }
 
-func groupRow(g query.Group) []string {
-	return []string{g.Label, query.Cores(g.Total.Cores), query.Bytes(g.Total.Private)}
+// columns says which GPU columns a table has: only those that hold
+// something in at least one of its rows.
+type columns struct{ gpu, vram bool }
+
+func (c *columns) see(t query.Total) {
+	c.gpu = c.gpu || t.GPU >= 1
+	c.vram = c.vram || t.VRAM >= 1<<20
+}
+
+// cells are a row's numbers: CPU, memory, and the GPU columns in use.
+func (c columns) cells(cores float64, mem uint64, t query.Total) []string {
+	out := []string{query.Cores(cores), query.Bytes(mem)}
+	if c.gpu {
+		cell := ""
+		if t.GPU >= 1 {
+			cell = fmt.Sprintf("%.0f%% gpu", t.GPU)
+		}
+		out = append(out, cell)
+	}
+	if c.vram {
+		cell := ""
+		if t.VRAM >= 1<<20 {
+			cell = query.Bytes(t.VRAM) + " vram"
+		}
+		out = append(out, cell)
+	}
+	return out
+}
+
+// align is the table alignment for a label, the cells, and trailing
+// left-aligned columns.
+func (c columns) align(trailing string) string {
+	return "l" + strings.Repeat("r", len(c.cells(0, 0, query.Total{}))) + trailing
+}
+
+func groupColumns(groups []query.Group) columns {
+	var c columns
+	for _, g := range groups {
+		c.see(g.Total)
+	}
+	return c
+}
+
+func groupRow(g query.Group, c columns) []string {
+	return append([]string{g.Label}, c.cells(g.Total.Cores, g.Total.Private, g.Total)...)
 }
 
 // shown drops groups that use nothing worth a line.
 func shown(groups []query.Group) []query.Group {
 	var out []query.Group
 	for _, g := range groups {
-		if g.Total.Cores >= 0.05 || g.Total.Private >= 1<<20 {
+		if g.Total.Cores >= 0.05 || g.Total.Private >= 1<<20 || g.Total.GPU >= 1 || g.Total.VRAM >= 1<<20 {
 			out = append(out, g)
 		}
 	}
@@ -260,15 +353,16 @@ func bare(g query.Group) string {
 	return strings.TrimSuffix(g.Label, fmt.Sprintf(" ×%d", g.Total.Count))
 }
 
-func card(v *query.View) report {
-	r := report{body: []string{v.Load(query.DefaultThresholds).Line(), machine(v)}}
+func card(v *query.View, cfg config) report {
+	r := report{body: []string{v.Load(cfg.Thresholds).Line(), machine(v)}}
 	groups := shown(v.Groups("cpu"))
 	groups = groups[:min(len(groups), 5)]
+	cols := groupColumns(groups)
 	var rows [][]string
 	for _, g := range groups {
-		rows = append(rows, groupRow(g))
+		rows = append(rows, groupRow(g, cols))
 	}
-	for i, l := range table(rows, "lrr") {
+	for i, l := range table(rows, cols.align("")) {
 		prefix := "     "
 		if i == 0 {
 			prefix = "top  "
@@ -291,8 +385,10 @@ func card(v *query.View) report {
 func top(v *query.View, by string) report {
 	r := report{body: []string{machine(v)}}
 	var rows [][]string
-	for _, g := range shown(v.Groups(by)) {
-		row := groupRow(g)
+	groups := shown(v.Groups(by))
+	cols := groupColumns(groups)
+	for _, g := range groups {
+		row := groupRow(g, cols)
 		if g.Lead != nil {
 			row = append(row, v.Handle(g.Lead))
 			if len(r.next) == 0 {
@@ -301,7 +397,7 @@ func top(v *query.View, by string) report {
 		}
 		rows = append(rows, row)
 	}
-	r.body = append(r.body, table(rows, "lrrl")...)
+	r.body = append(r.body, table(rows, cols.align("l"))...)
 	if by == "cpu" {
 		r.next = append(r.next, next{"pulse top --by mem", "sorted by memory instead"})
 	}
@@ -335,11 +431,34 @@ func tree(v *query.View, arg string) (report, error) {
 	}
 	r := report{body: []string{head}}
 	if sum.Count == 1 {
-		r.body = append(r.body, fmt.Sprintf("1 process, %s, %s resident, %s of it private", query.Cores(sum.Cores), query.Bytes(root.RSS), query.Bytes(root.Private())))
+		line := fmt.Sprintf("1 process, %s, %s resident, %s of it private", query.Cores(sum.Cores), query.Bytes(root.RSS), query.Bytes(root.Private()))
+		if sum.GPU >= 1 {
+			line += fmt.Sprintf(", %.0f%% of the GPU", sum.GPU)
+		}
+		if sum.VRAM >= 1<<20 {
+			line += ", " + query.Bytes(sum.VRAM) + " of GPU memory"
+		}
+		r.body = append(r.body, line)
 		return r, nil
 	}
 	r.body = append(r.body, fmt.Sprintf("total %d processes, %s, %s private memory (shared libraries and files not summed)",
 		sum.Count, query.Cores(sum.Cores), query.Bytes(sum.Private)))
+	if sum.GPU >= 1 || sum.VRAM >= 1<<20 {
+		gpu := query.Bytes(sum.VRAM) + " of GPU memory"
+		if sum.GPU >= 1 {
+			gpu = fmt.Sprintf("%.0f%% of the GPU, ", sum.GPU) + gpu
+		}
+		r.body = append(r.body, "      "+gpu)
+	}
+	var cols columns
+	var see func(n *query.Node)
+	see = func(n *query.Node) {
+		for _, c := range n.Children {
+			cols.see(c.Own)
+			see(c)
+		}
+	}
+	see(n)
 	var rows [][]string
 	var walk func(n *query.Node, prefix string)
 	walk = func(n *query.Node, prefix string) {
@@ -348,23 +467,25 @@ func tree(v *query.View, arg string) (report, error) {
 			if i == len(n.Children)-1 {
 				branch, below = "└─ ", "   "
 			}
-			rows = append(rows, nodeRow(v, c, prefix+branch))
+			rows = append(rows, nodeRow(v, c, cols, prefix+branch))
 			walk(c, prefix+below)
 		}
 	}
 	walk(n, "")
-	r.body = append(r.body, table(rows, "lrrl")...)
+	r.body = append(r.body, table(rows, cols.align("l"))...)
 	return r, nil
 }
 
 // nodeRow is a tree line. One process shows its resident memory, as every
 // monitor does; merged processes show their private memory, which adds up.
-func nodeRow(v *query.View, n *query.Node, prefix string) []string {
+func nodeRow(v *query.View, n *query.Node, cols columns, prefix string) []string {
 	if len(n.Procs) > 1 {
-		return []string{fmt.Sprintf("%s%s ×%d", prefix, n.Label, len(n.Procs)), query.Cores(n.Own.Cores), query.Bytes(n.Own.Private), ""}
+		row := append([]string{fmt.Sprintf("%s%s ×%d", prefix, n.Label, len(n.Procs))}, cols.cells(n.Own.Cores, n.Own.Private, n.Own)...)
+		return append(row, "")
 	}
 	p := n.Procs[0]
-	return []string{prefix + n.Label, query.Cores(p.Cores), query.Bytes(p.RSS), v.Handle(p)}
+	row := append([]string{prefix + n.Label}, cols.cells(p.Cores, p.RSS, n.Own)...)
+	return append(row, v.Handle(p))
 }
 
 // clipArgs shortens a command line for a heading.

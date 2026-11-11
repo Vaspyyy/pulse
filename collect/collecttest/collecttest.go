@@ -95,6 +95,11 @@ func (m *Machine) Pressure(cpu, memory, io float64) {
 	}
 }
 
+// SysFile writes a file below /sys.
+func (m *Machine) SysFile(name, content string) {
+	m.put(m.Sys, name, content)
+}
+
 // Cgroup writes a file below /sys/fs/cgroup.
 func (m *Machine) Cgroup(name, content string) {
 	m.put(m.Sys, "fs/cgroup/"+name, content)

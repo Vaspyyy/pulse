@@ -17,8 +17,15 @@ func TestSnapshot(t *testing.T) {
 		RSS: 300 << 20, Shared: 100 << 20, Cgroup: "user.slice/a.scope",
 		Env: map[string]string{"T3CODE_THREAD_ID": "abc"}})
 	m.Add(collecttest.P{PID: 9, PPID: 1, Comm: "a b) c", Args: []string{"/usr/bin/x"}, Start: 400, NoEnv: true})
+	m.SysFile("class/hwmon/hwmon0/name", "nvme\n")
+	m.SysFile("class/hwmon/hwmon0/temp1_input", "33000\n")
+	m.SysFile("class/hwmon/hwmon2/name", "k10temp\n")
+	m.SysFile("class/hwmon/hwmon2/temp1_input", "61500\n")
 	c := collect.New(m.Roots())
 	s := c.Snapshot()
+	if s.CPUTemp != 61.5 {
+		t.Errorf("CPU at %.1f°C, want 61.5 from k10temp", s.CPUTemp)
+	}
 
 	if s.BootID != collecttest.BootID || s.BootTime.Unix() != collecttest.BootTime {
 		t.Errorf("boot id %q, boot time %v", s.BootID, s.BootTime)

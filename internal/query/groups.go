@@ -1,6 +1,7 @@
 package query
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 )
@@ -16,8 +17,8 @@ type Group struct {
 	Lead *Proc
 }
 
-// Groups returns every group, heaviest first: by "cpu" (then memory) or
-// by "mem".
+// Groups returns every group, heaviest first: by "cpu" (then memory), by
+// "mem", or by "gpu" (then GPU memory).
 func (v *View) Groups(by string) []Group {
 	index := map[string]int{}
 	var groups []Group
@@ -64,14 +65,16 @@ func (v *View) Groups(by string) []Group {
 		}
 	}
 	slices.SortStableFunc(groups, func(a, b Group) int {
-		if by == "mem" {
-			switch {
-			case a.Total.Private > b.Total.Private:
-				return -1
-			case a.Total.Private < b.Total.Private:
-				return 1
+		switch by {
+		case "mem":
+			return cmp.Compare(b.Total.Private, a.Total.Private)
+		case "gpu":
+			if c := cmp.Compare(int(b.Total.GPU), int(a.Total.GPU)); c != 0 {
+				return c
 			}
-			return 0
+			if c := cmp.Compare(b.Total.VRAM, a.Total.VRAM); c != 0 {
+				return c
+			}
 		}
 		return heavier(a.Total, b.Total)
 	})
@@ -116,10 +119,7 @@ func (v *View) Tree(root *Proc) *Node {
 func (n *Node) sum() Total {
 	t := n.Own
 	for _, c := range n.Children {
-		s := c.sum()
-		t.Count += s.Count
-		t.Cores += s.Cores
-		t.Private += s.Private
+		t.merge(c.sum())
 	}
 	return t
 }

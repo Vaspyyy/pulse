@@ -1,0 +1,12 @@
+The config file is /home/u/.config/pulse-monitor/config
+One "key = value" per line; # starts a comment. Every key is optional:
+
+  cpu_busy = 50          busy above this percent of all CPUs
+  gpu_busy = 30          busy above this percent of a GPU's power limit (of its
+                         utilisation where the power can't be read); a game
+                         counts as busy whatever the GPU does
+  memory_pressure = 10   busy above this memory pressure (some avg10, percent)
+  agent_headroom = 2     busy when T3's agents are within this many GB of being throttled
+  game_process = name    a program that counts as a game; may be repeated
+  game_env = NAME        an environment variable that marks a game's processes
+                         (its value is shown as the game's name); may be repeated

@@ -1,6 +1,6 @@
 # Pulse: design
 
-Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)).
+Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)). Fifth pass, the same day: GPU (NVML, sysfs), temperatures and the config file are built, and the GPU part of the load verdict now goes by power draw, because utilisation turned out to mislead (see [the load verdict](#the-load-verdict)).
 
 Pulse is a personal tool for one machine, where agents always run in T3 Code. So T3 is a first-class target, not an optional extra.
 
@@ -88,7 +88,7 @@ Kept as pitched: two interfaces on one collector, standalone first, no daemon, p
 | `collect` | stdlib | reads the machine. No TUI or Prism deps, so crux can import it. **Exists**: CPU, memory, pressure, processes, handles |
 | `collect/collecttest` | `collect` | builds a fake machine (`/proc` and `/sys` trees) for tests |
 | `collect/t3` | stdlib | T3's agent slices, scopes, limits, memory use and threads. **Exists**, with its tests |
-| `collect/gpu` | `purego` | NVML loaded at runtime; AMD and Intel from sysfs |
+| `collect/gpu` | `purego` | NVML loaded at runtime; AMD and Intel from sysfs. **Exists**; per-process numbers for NVIDIA only |
 | `record` | `collect` | samples a process tree while it runs; owns the run store format |
 | `internal/query` | `collect`, `record` | grouping, trees, games, the load verdict, diffs. **Exists**, without diffs |
 | `attrib` | `query`, `prism/repo` | repo, session and crux attribution, each with a basis |
@@ -109,8 +109,8 @@ Language: Go, like the other four tools. They share `prism/repo` and `prism/repo
 | cgroups | `cpu.stat`, `memory.current`, `memory.peak`, `memory.events`, `pids.current` under `/sys/fs/cgroup` |
 | Temperatures | `/sys/class/hwmon`, thermal zones as fallback |
 | Disks, network | `/proc/diskstats`, `statfs`, `/proc/net/dev` |
-| GPU, NVIDIA | NVML (`libnvidia-ml.so.1`) loaded with dlopen, no cgo: utilisation, VRAM, temperature, and per process both VRAM and utilisation |
-| GPU, AMD and Intel | `gpu_busy_percent`, `mem_info_vram_*`, hwmon; per-process from DRM `fdinfo` |
+| GPU, NVIDIA | NVML (`libnvidia-ml.so.1`) loaded with dlopen, no cgo: utilisation, power draw and limit, VRAM, temperature, and per process both VRAM and utilisation. One reading takes about 20 ms, taken while the collector waits between its two |
+| GPU, AMD and Intel | `gpu_busy_percent`, `mem_info_vram_*`, hwmon (temperature, `power1_average`, `power1_cap`); per-process from DRM `fdinfo` (not built: no such GPU here to check it on) |
 
 The machine it's for: 16 threads, 62 GB, an RTX 3070 on driver 620.70 (open kernel modules), cgroup v2 with cpu, io, memory and pids delegated to the user manager, about 560 processes.
 
@@ -123,6 +123,8 @@ Rules:
 - **A missing source is absent, not an error.** No NVIDIA library means no GPU section.
 
 **NVIDIA checked (2026-11-09).** The 620.70 open kernel modules don't publish per-client DRM statistics: `fdinfo` for `/dev/nvidia0` and `/dev/dri/renderD128` holds only `pos`, `flags`, `mnt_id` and `ino`, no `drm-*` keys. NVML has everything instead: per-process VRAM for graphics and compute processes alike (kwin, plasmashell, browsers, Steam) and per-process utilisation (`nvidia-smi pmon` showed kwin at 19 %). So NVIDIA goes through NVML only, and `fdinfo` stays the source for AMD and Intel.
+
+**Utilisation is not load (2026-11-11).** With only the desktop running, the RTX 3070 reported 17 to 51 % utilisation while drawing 27 to 38 W of its 240 W limit: it clocks itself down (P3 to P5, 1035 MHz instead of 2100) and then spends a larger share of the time busy. The highest utilisation came with the lowest clock. Power draw against the power limit doesn't have that problem, so that's what `gpu.Device.Load` returns where power can be read, and utilisation only where it can't.
 
 ### Process identity
 
@@ -295,7 +297,8 @@ Wording follows the evidence rules: Pulse reports what was measured and what els
 "Busy" means any of:
 
 - a game is running (markers below);
-- CPU above 50 % of all cores, or GPU above 30 %, over the window;
+- CPU above 50 % of all cores over the window;
+- a GPU drawing more than 30 % of its power limit (72 W of 240 W here; utilisation above 30 % where power can't be read), when no game explains it;
 - memory pressure: PSI `some avg10` above 10 %;
 - T3's agents are within 2 GB of their memory limit.
 
@@ -311,7 +314,7 @@ Checked 2026-11-09: Heroic 2.22.4 sets those variables on every game it starts, 
 
 Markers inside a T3 agent scope don't count: an agent's test under a headless gamescope isn't somebody playing.
 
-The thresholds and the marker list will live in the config file (constants until then). The verdict always lists its reasons, so an agent never has to trust a bare "busy", and a quiet verdict says what was checked: `quiet: cpu 0.8 of 16 cores, no game, no memory pressure`. A CPU reason names the heaviest group, since the asking agent's own build counts too. Pulse's SKILL.md tells agents: run `pulse load` before timing measurements or heavy benchmarks, and if it says busy, skip the measurement and say why.
+The thresholds live in the config file, `$XDG_CONFIG_HOME/pulse-monitor/config` (`key = value` lines: `cpu_busy`, `gpu_busy`, `memory_pressure`, `agent_headroom`), and so do extra game markers (`game_process`, `game_env`); `pulse help config` prints the keys. A line Pulse can't use is reported on stderr and skipped. The verdict always lists its reasons, so an agent never has to trust a bare "busy", and a quiet verdict says what was checked: `quiet: cpu 0.8 of 16 cores, no game, no memory pressure`. A CPU reason names the heaviest group, since the asking agent's own build counts too. Pulse's SKILL.md tells agents: run `pulse load` before timing measurements or heavy benchmarks, and if it says busy, skip the measurement and say why.
 
 ## Recording runs
 
@@ -401,7 +404,7 @@ The 2026-11-08 benchmark (52 runs, Sonnet 5.5, 13 tasks on 9 repos) found agents
 | --- | --- | --- |
 | M0 | collector (no GPU; T3 discovery is done in `collect/t3`), identity, card, `load`, `top`, `tree`, `agents`, SKILL.md | **done 2026-11-11**: golden tests on a built `/proc` tree pass; the card is 10 lines on the target machine. `agents` came forward from M3, since it needs no Prism. Not in M0: `--json`, the `context:` line and "this repo" (M3), `--by gpu\|io`, the config file. Steam and Heroic detection is tested on built processes only, until real games are tried |
 | A | eval A | results written up: go, or fix discoverability first |
-| M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes |
+| M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures. **GPU, temperatures and the config file are done (2026-11-11)**, with `top --by gpu` and GPU columns in the card, `top` and `tree`; the TUI isn't started | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes |
 | M2 | `pulse run`, run store, `runs`, `show`, `diff`, other-load marks | the diff of two fixture runs matches its golden file |
 | M3 | Prism adapter: envelope, `report.Pulse`, attribution, `project`, `agents`, `next:` lines | e2e: every ref Pulse JSON contains is valid (normally none); context off shows the same processes |
 | M4 | crux: `resources:` line, run store, `next: pulse show` | e2e: crux's `next: pulse show` and Pulse's `next: recap` run as printed |
@@ -453,6 +456,7 @@ Each can be revisited; the reason says what would change it.
 | Agents read text, programs read JSON | Prism's output rule |
 | Processes get their own ids, never refs | the ref grammar and the reserved ref fields |
 | Attribution states its basis | Prism's evidence rules |
+| GPU load is power draw over power limit, not utilisation | measured: an idle desktop read up to 51 % utilisation at 30 W of 240 W, because the GPU had clocked down. A 30 % utilisation limit would have said "busy" all day |
 | NVML through dlopen, no cgo | a static binary that also runs where no NVIDIA library is installed; the 620 driver has no DRM `fdinfo` stats, and NVML covers per-process VRAM and utilisation |
 | Handles are `<pid>.<3 letters>` | short, keeps the pid usable, can't be misread as a number, deterministic (see [process identity](#process-identity)) |
 | `pulse run` records in a child cgroup of the agent's scope | exact CPU time and membership without leaving T3's control; `systemd-run --scope` would have moved builds out of the agent's scope |

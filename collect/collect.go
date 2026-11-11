@@ -10,6 +10,8 @@ package collect
 import (
 	"io/fs"
 	"os"
+	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +56,7 @@ type Snapshot struct {
 	BootID   string    // /proc/sys/kernel/random/boot_id
 	BootTime time.Time // btime in /proc/stat
 	CPU      CPUTimes  // all CPUs together
+	CPUTemp  float64   // °C, 0 when no sensor is known
 	Cores    []CPUTimes
 	Mem      Memory
 	Pressure Pressure
@@ -86,11 +89,15 @@ type Collector struct {
 	// Now is the clock snapshots are stamped with: time.Now unless a test
 	// sets another.
 	Now func() time.Time
+	// Markers are the environment variables to keep. Set it before the
+	// first snapshot.
+	Markers []string
 
-	roots    Roots
-	pageSize uint64
-	bootID   string
-	static   map[procKey]*static
+	roots       Roots
+	pageSize    uint64
+	cpuTempFile string // "" until looked for, "-" when there is none
+	bootID      string
+	static      map[procKey]*static
 }
 
 // New returns a collector for roots.
@@ -99,7 +106,7 @@ func New(roots Roots) *Collector {
 	if ps == 0 {
 		ps = os.Getpagesize()
 	}
-	return &Collector{Now: time.Now, roots: roots, pageSize: uint64(ps), static: map[procKey]*static{}}
+	return &Collector{Now: time.Now, Markers: Markers, roots: roots, pageSize: uint64(ps), static: map[procKey]*static{}}
 }
 
 // Snapshot reads the machine. Sources that are missing or unreadable are
@@ -118,8 +125,44 @@ func (c *Collector) Snapshot() *Snapshot {
 		Memory: c.readPressure("pressure/memory"),
 		IO:     c.readPressure("pressure/io"),
 	}
+	s.CPUTemp = c.readCPUTemp()
 	c.readProcs(s)
 	return s
+}
+
+// cpuSensors are the hwmon drivers whose first temperature is the CPU's:
+// AMD's (k10temp, zenpower) and Intel's (coretemp, the package).
+var cpuSensors = []string{"k10temp", "zenpower", "coretemp"}
+
+// readCPUTemp returns the CPU's temperature from /sys/class/hwmon, or
+// from the x86 package thermal zone when no hwmon driver has it.
+func (c *Collector) readCPUTemp() float64 {
+	milli := func(name string) float64 {
+		b, err := fs.ReadFile(c.roots.Sys, name)
+		if err != nil {
+			return 0
+		}
+		n, _ := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
+		return n / 1000
+	}
+	if c.cpuTempFile == "" {
+		c.cpuTempFile = "-" // looked, found nothing
+		find := func(dir, nameFile, valueFile string, names ...string) {
+			entries, _ := fs.ReadDir(c.roots.Sys, dir)
+			for _, e := range entries {
+				b, err := fs.ReadFile(c.roots.Sys, path.Join(dir, e.Name(), nameFile))
+				if err == nil && slices.Contains(names, strings.TrimSpace(string(b))) && c.cpuTempFile == "-" {
+					c.cpuTempFile = path.Join(dir, e.Name(), valueFile)
+				}
+			}
+		}
+		find("class/hwmon", "name", "temp1_input", cpuSensors...)
+		find("class/thermal", "type", "temp", "x86_pkg_temp")
+	}
+	if c.cpuTempFile == "-" {
+		return 0
+	}
+	return milli(c.cpuTempFile)
 }
 
 func (c *Collector) readStat(s *Snapshot) {
