@@ -10,8 +10,11 @@ import (
 // the kernel's threads, or every process of one program.
 type Group struct {
 	Kind  string // game, agents, kernel or app
-	Label string
+	Name  string // what the group is, the same from one reading to the next
+	Label string // Name with the count, as shown: "firefox ×24"
 	Total Total
+	// Members are the group's processes, ascending by pid.
+	Members []*Proc
 	// Lead is the group's top process, the heaviest one whose parent isn't
 	// in the group: where to look next. nil for the agents and the kernel.
 	Lead *Proc
@@ -38,9 +41,10 @@ func (v *View) Groups(by string) []Group {
 		if !ok {
 			g = len(groups)
 			index[kind+"\x00"+key] = g
-			groups = append(groups, Group{Kind: kind, Label: key})
+			groups = append(groups, Group{Kind: kind, Name: key, Label: key})
 		}
 		groups[g].Total.add(p)
+		groups[g].Members = append(groups[g].Members, p)
 		member[i] = g
 	}
 	for i := range v.Procs {

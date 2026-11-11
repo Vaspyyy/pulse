@@ -87,4 +87,5 @@ next: pulse show r7k2mq   per-process breakdown and timeline
 
 - Linux only. A game is found by its launcher (or a marker from the config file), not by how it uses the GPU: something heavy on the GPU that isn't a game shows as `gpu draws …`.
 - Other users' processes show CPU and memory but can't be attributed to a game or agent.
+- On a terminal, `pulse` alone opens a full-screen monitor for people. You get the card, because your output is no terminal; `pulse -A` asks for the card by name. Never run `pulse tui`: it needs a terminal and doesn't exit.
 - Rates in the card, `top` and `tree` come from a quarter second, so a short spike can be missed or caught: for a build's real cost, measure the whole run with `pulse run`.

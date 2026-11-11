@@ -9,11 +9,12 @@ import (
 	"github.com/Vaspyyy/pulse/internal/query"
 )
 
-// config is what the config file can change.
-type config struct {
+// Config is what the config file can change.
+type Config struct {
 	Thresholds  query.Thresholds
 	GameEnv     []string // more environment variables that mark a game
 	GameProcess []string // more program names that are games
+	Theme       string   // the TUI's colours, "" for the default
 }
 
 const configHelp = `The config file is %s
@@ -28,6 +29,8 @@ One "key = value" per line; # starts a comment. Every key is optional:
   game_process = name    a program that counts as a game; may be repeated
   game_env = NAME        an environment variable that marks a game's processes
                          (its value is shown as the game's name); may be repeated
+  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte or terminal
+                         (the TUI's t key switches and remembers it)
 `
 
 // ConfigPath is $XDG_CONFIG_HOME/pulse-monitor/config. Not "pulse", which
@@ -40,9 +43,9 @@ func ConfigPath(getenv func(string) string) string {
 	return filepath.Join(base, "pulse-monitor", "config")
 }
 
-// parseConfig reads the config file's text. A line it can't use is
+// ParseConfig reads the config file's text. A line it can't use is
 // reported and skipped: a typo must not take the monitor down.
-func parseConfig(text string) (cfg config, problems []string) {
+func ParseConfig(text string) (cfg Config, problems []string) {
 	cfg.Thresholds = query.DefaultThresholds
 	for i, line := range strings.Split(text, "\n") {
 		line, _, _ = strings.Cut(line, "#")
@@ -87,6 +90,8 @@ func parseConfig(text string) (cfg config, problems []string) {
 			cfg.GameProcess = append(cfg.GameProcess, val)
 		case "game_env":
 			cfg.GameEnv = append(cfg.GameEnv, val)
+		case "theme":
+			cfg.Theme = val
 		default:
 			bad("unknown key %q", key)
 		}

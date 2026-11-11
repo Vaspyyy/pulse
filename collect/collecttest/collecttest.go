@@ -133,8 +133,8 @@ func (m *Machine) writeProc(p *P) {
 	// pid (comm) state ppid pgrp session tty tpgid flags minflt cminflt
 	// majflt cmajflt utime stime cutime cstime priority nice threads
 	// itrealvalue starttime vsize rss
-	m.put(m.Proc, dir+"stat", fmt.Sprintf("%d (%s) S %d 1 1 0 -1 %d 0 0 0 0 %d 0 0 0 20 0 1 0 %d 1000 10\n",
-		p.PID, p.Comm, p.PPID, flags, p.Ticks, p.Start))
+	m.put(m.Proc, dir+"stat", fmt.Sprintf("%d (%s) S %d 1 1 0 -1 %d 0 0 0 0 %d 0 0 0 20 0 1 0 %d 1000 %d\n",
+		p.PID, p.Comm, p.PPID, flags, p.Ticks, p.Start, p.RSS/4096))
 	m.put(m.Proc, dir+"statm", fmt.Sprintf("%d %d %d 1 0 1 0\n", p.RSS/4096+100, p.RSS/4096, p.Shared/4096))
 	m.put(m.Proc, dir+"cgroup", "0::/"+p.Cgroup+"\n")
 	cmdline := ""

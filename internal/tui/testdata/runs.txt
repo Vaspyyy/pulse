@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Runs ──────────────────────────── 3 recorded ─╮╭─ r9q4xt change ──────────────────────────────────── pulse@abc123f ─╮
+│   WHEN         COMMAND           TIME     PEAK ││ cargo test                                                         │
+│   11-09 22:40  cargo test      61.0 s  11.5 GB ││ exit 0 · 61.0 s · 11-09 22:40                                      │
+│   11-08 21:14  cargo test      48.2 s   8.9 GB ││                                                                    │
+│   11-07 09:05  make -j8         1.2 s   300 MB ││ cpu    701 s (660 user, 41.0 sys), 11.5 cores on average           │
+│                                                ││ peak   11.5 GB private memory (sampled every 100 ms); largest pro… │
+│                                                ││ stall  cpu 9.8 s, memory 1.2 s, io 0.6 s                           │
+│                                                ││ io     1.2 GB read, 3.4 GB written                                 │
+│                                                ││ other  a game (Hades), 2.1 cores on average: wall time isn't comp… │
+│                                                ││                                                                    │
+│                                                ││ cores over time, up to 14.7                                        │
+│                                                ││                  ▂▄▅▇█                 ▂▄▅▇█                 ▂▄▅▇█ │
+│                                                ││             ▂▄▅▇██████            ▂▄▅▇██████            ▂▄▅▇██████ │
+│                                                ││        ▂▄▅▆███████████       ▂▄▅▆███████████       ▂▄▅▆███████████ │
+│                                                ││   ▂▄▅▆████████████████  ▂▄▅▆████████████████  ▂▄▅▆████████████████ │
+│                                                ││ ▆█████████████████████▆█████████████████████▆█████████████████████ │
+│                                                ││ memory over time, up to 11.5 GB                                    │
+│                                                ││                                                     ▁▁▂▂▃▄▄▅▅▆▆▇██ │
+│                                                ││                                        ▁▂▂▃▃▄▄▅▆▆▇▇███████████████ │
+│                                                ││                          ▁▂▂▂▃▄▄▅▅▆▇▇█████████████████████████████ │
+│                                                ││            ▁▁▂▂▃▃▄▅▅▆▆▇███████████████████████████████████████████ │
+│                                                ││ ▂▃▃▄▅▅▆▆▇█████████████████████████████████████████████████████████ │
+│                                                ││                                                                    │
+│                                                ││ processes, as sampled                                              │
+│                                                ││ rustc syn                                    31.0 s cpu   2.1 GB   │
+│                                                ││ rustc ×211                                    559 s cpu   1.4 GB   │
+│                                                ││ cc ×40                                       41.0 s cpu   210 MB   │
+│                                                ││ cargo test                                    2.0 s cpu    90 MB   │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  space mark two to compare  ·  t theme  ·  ? help  ·  q quit

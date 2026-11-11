@@ -10,3 +10,5 @@ One "key = value" per line; # starts a comment. Every key is optional:
   game_process = name    a program that counts as a game; may be repeated
   game_env = NAME        an environment variable that marks a game's processes
                          (its value is shown as the game's name); may be repeated
+  theme = mocha          the TUI's colours: mocha, tokyo, gruvbox, latte or terminal
+                         (the TUI's t key switches and remembers it)

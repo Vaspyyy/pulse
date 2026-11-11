@@ -1,6 +1,8 @@
 pulse: what is using this machine
 
-  pulse                       the card: load verdict, machine, top groups
+  pulse                       on a terminal: the full-screen monitor (? shows its keys)
+  pulse -A                    the card: load verdict, machine, top groups; it is
+                              also what pulse prints when its output is no terminal
   pulse load                  one line: quiet, or busy with the reasons
   pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals

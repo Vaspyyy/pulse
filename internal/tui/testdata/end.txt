@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Processes ─────────────────────────────────────────────── processes by cpu ─╮╭─ Selected ───────────────────────────╮
+│ NAME                                  CPU ▾            MEMORY   GPU     VRAM ││ Hades.exe                            │
+│ Hades.exe                    ━━━━━━━━   2.0  ━━━━━━━━  4.0 GB   68%   5.1 GB ││ 201.hds                              │
+│ rustc syn                    ━━━━━━━━   1.0  ━━━━━━━━  2.1 GB                ││                                      │
+│ rustc pulse                  ━━━━━━━━   0.9  ━━━━━━━━  1.4 GB                ││ cpu      ━━━━━━━━━━━━━━━   2.0 cores │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ memory   ━━━━━━━━━━━━━━━      4.0 GB │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││          3.7 GB of it private        │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ gpu      68% · 5.1 GB vram           │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││                                      │
+│ firefox                      ━━━━━━━━   0.4  ━━━━━━━━  400 MB                ││ state    sleeping · 1 threads        │
+│ cargo build                  ━━━━━━━━   0.1  ━━━━━━━━   90 MB                ││ started  56 min ago                  │
+│ wineserver                   ━━━━━━━━   0.1  ━━━━━━━━   30 MB                ││ game     Hades                       │
+│ claude                       ━━                                                                                      │
+│ firefox                      ━━  ╭─ End this process? ────────────────────────────╮  nd                              │
+│ firefox                      ━━  │                                                │  mes\Hades\Hades.exe             │
+│ firefox                      ━━  │ Hades.exe  201.hds                             │                                  │
+│ steam                        ━━  │                                                │  p                               │
+│ opencode                     ━━  │ enter      ask it to quit (SIGTERM)            │  on.scope                        │
+│ gamescope                    ━━  │ shift+k    force it (SIGKILL)                  │                                  │
+│ postgres                     ━━  │ esc        leave it alone                      │                                  │
+│ systemd                      ━━  │                                                │                                  │
+│ zsh -c                       ━━  ╰────────────────────────────────────────────────╯                                  │
+│ reaper                       ━━                                                                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  enter open  ·  / filter  ·  s sort  ·  v view  ·  x end  ·  t theme  ·  ? help  ·  q quit

@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Processes ────────────────────────────────────────────────── groups by cpu ─╮╭─ Selected ───────────────────────────╮
+│ NAME                                  CPU ▾            MEMORY   GPU     VRAM ││ t3code agents ×2                     │
+│ ▾ t3code agents ×2           ━━━━━━━━   5.6  ━━━━━━━━  4.2 GB                ││                                      │
+│     rustc syn                ━━━━━━━━   1.0  ━━━━━━━━  2.1 GB                ││ cpu      ━━━━━━━━━━━━━━━   5.6 cores │
+│     rustc pulse              ━━━━━━━━   0.9  ━━━━━━━━  1.4 GB                ││ memory   ━━━━━━━━━━━━━━━      4.2 GB │
+│     cc                       ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││          private, shared files not … │
+│     cc                       ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││                                      │
+│     cc                       ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ made of  11 processes                │
+│     cc                       ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││                                      │
+│     cargo build              ━━━━━━━━   0.1  ━━━━━━━━   90 MB                ││ rustc syn        1.0   2.1 GB    303 │
+│     claude                   ━━━━━━━━   0.0  ━━━━━━━━  500 MB                ││ rustc pulse      0.9   1.4 GB    304 │
+│     opencode                 ━━━━━━━━   0.0  ━━━━━━━━  180 MB                ││ cc               0.9    60 MB    305 │
+│     gamescope                ━━━━━━━━   0.0  ━━━━━━━━   80 MB                ││ cc               0.9    60 MB    306 │
+│     zsh -c                   ━━━━━━━━   0.0  ━━━━━━━━    6 MB                ││ cc               0.9    60 MB    307 │
+│ ▸ Hades (game)               ━━━━━━━━   2.1  ━━━━━━━━  3.7 GB   68%   5.1 GB ││ cc               0.9    60 MB    308 │
+│ ▸ firefox ×4                 ━━━━━━━━   0.4  ━━━━━━━━  1.1 GB    3%   300 MB ││ cargo build      0.1    90 MB    302 │
+│ ▸ steam                      ━━━━━━━━   0.0  ━━━━━━━━  200 MB                ││ claude           0.0   500 MB    300 │
+│ ▸ postgres                   ━━━━━━━━   0.0  ━━━━━━━━   50 MB                ││ opencode         0.0   180 MB    310 │
+│ ▸ systemd                    ━━━━━━━━   0.0  ━━━━━━━━    4 MB                ││ gamescope        0.0    80 MB    309 │
+│                                                                              ││ zsh -c           0.0     6 MB    301 │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  enter open  ·  / filter  ·  s sort  ·  v view  ·  x end  ·  t theme  ·  ? help  ·  q quit

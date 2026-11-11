@@ -376,6 +376,24 @@ What that gives:
 - **Input and looks:** arrows and vim keys, mouse, `?` for help. A few built-in themes plus one built from the terminal's 16 colours. Respects `NO_COLOR`.
 - **Launch:** the first frame shows within 100 ms with what one reading gives; graphs fill in as samples arrive.
 
+**As built (2026-11-11)**, in `internal/tui` on Bubble Tea 2 and Lip Gloss 2. What differs from the list above:
+
+- **Graphs are solid blocks, not braille:** one reading per column, eight levels per cell, coloured by a gradient from floor to ceiling. Braille dots looked thin and broke up in most fonts. Network and disk draw "in" upwards and "out" downwards from a shared middle line; the downward half has only three levels per cell, since Unicode has no fine blocks that hang from the top.
+- **Keys:** `v` switches between groups, all processes and the tree (one key for the three views, with groups first, since they are what the card shows), `s` sorts, `x` ends a process (`k` is "up"), `t` is the next theme.
+- **Ending a process** asks first and works on one process only: a line that stands for several (a group, a folded tree node) says to pick one. The question holds the handle, and the handle is looked up again when it is answered, so a pid that was reused in between gets no signal.
+- **Not built:** CPU frequency, filesystem usage, open files, the projects view (it needs Prism, M3). Network and disk are rates only, summed over physical interfaces and whole disks.
+- **Themes:** mocha (default), tokyo, gruvbox, latte, terminal. The theme and the tab are kept in `tui.json` in the state directory; `theme` in the config file sets the first one.
+- **Narrow terminals:** 72×20 is the least. Below about 104 columns the detail pane goes; tables drop their last columns before the name gets too short; the footer drops the keys a user finds unaided.
+- **Tests** drive the model by hand (no program, no terminal, no clock) on `collecttest.Desk`: a golden frame per screen at 120×38, and every tab at seven sizes, where every line of every frame must be exactly as wide as the terminal.
+
+### What the TUI costs
+
+Measured on 2026-11-11 with `PULSE_PROFILE` (a CPU and heap profile of the running monitor) and the benchmarks in `internal/tui/live_bench_test.go`, on a quiet machine with about 630 processes.
+
+- **CPU: about 2.2 % of one core at one reading a second**, down from 7.4 % in the first version. Three things brought it down: `/proc/<pid>/stat` and `statm` are read with three system calls each instead of the six of `os.ReadFile`, and `statm` only every fifth reading (`Collector.SharedEvery`; `stat` has the resident size); NVML's process lists, three round trips to the driver, are asked for every 2.5 s instead of every reading; and text is styled by a small type of Pulse's own instead of Lip Gloss, with gradients blended once. One second now brings one message and one frame.
+- **What is left** is mostly not Pulse's to save: six tenths of it is the kernel writing `/proc/<pid>/stat` for every process (about 8 µs each, more for processes with many threads), a tenth NVML, a tenth T3's cgroup files. Drawing a frame takes half a millisecond. The 1 % in the budget below would need the process list read less often than the graphs (every 2 or 3 s, as btop and htop do by default), which the collector can't do yet: a snapshot is all or nothing.
+- **Memory: 52 MB resident, of which about 27 MB is NVIDIA's library** (it maps `libcuda` and keeps 20 MB of its own). Pulse's own share is about 18 MB: 12 MB of Go heap, the rest the binary. Without an NVIDIA GPU the 30 MB budget holds.
+
 ## Prism integration
 
 Optional by construction. Outside a git repo, or with `--no-context` or `PRISM_NO_CONTEXT=1`, Pulse is a plain system monitor, and the only difference is the missing "this repo" section. Context follows Prism's rules: it may rank, mark and add, never hide a process that would show without it.
@@ -415,7 +433,7 @@ The 2026-11-08 benchmark (52 runs, Sonnet 5.5, 13 tasks on 9 repos) found agents
 | --- | --- | --- |
 | M0 | collector (no GPU; T3 discovery is done in `collect/t3`), identity, card, `load`, `top`, `tree`, `agents`, SKILL.md | **done 2026-11-11**: golden tests on a built `/proc` tree pass; the card is 10 lines on the target machine. `agents` came forward from M3, since it needs no Prism. Not in M0: `--json`, the `context:` line and "this repo" (M3), `--by gpu\|io`, the config file. Steam and Heroic detection is tested on built processes only, until real games are tried |
 | A | eval A | results written up: go, or fix discoverability first |
-| M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures. **GPU, temperatures and the config file are done (2026-11-11)**, with `top --by gpu` and GPU columns in the card, `top` and `tree`; the TUI isn't started | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes |
+| M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures. **done 2026-11-11**, with `top --by gpu` and GPU columns in the card, `top` and `tree`; for the TUI see "As built" in its section | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes. **Measured 2026-11-11** on the target machine (16 CPUs, about 630 processes, RTX 3070) in a hidden terminal: first frame after 36 ms; steady state about 2.2 % of a core and 52 MB. The first is met, the other two are not: see "What the TUI costs" |
 | M2 | `pulse run`, run store, `runs`, `show`, `diff`, other-load marks | **done 2026-11-11**: the diff of two fixture runs matches its golden file; the recorder is tested on real helper processes, with a cgroup inside a T3 agent scope and without |
 | M3 | Prism adapter: envelope, `report.Pulse`, attribution, `project`, `agents`, `next:` lines | e2e: every ref Pulse JSON contains is valid (normally none); context off shows the same processes |
 | M4 | crux: `resources:` line, run store, `next: pulse show` | e2e: crux's `next: pulse show` and Pulse's `next: recap` run as printed |
@@ -429,8 +447,8 @@ If the TUI matters more than the agent side at first, do M1 before M0's commands
 
 | What | Budget |
 | --- | --- |
-| TUI first frame | under 100 ms |
-| TUI steady state, 1 s refresh, 1,000 processes | under 1 % of one core, under 30 MB RSS |
+| TUI first frame | under 100 ms (36 ms measured) |
+| TUI steady state, 1 s refresh, 1,000 processes | under 1 % of one core, under 30 MB RSS (measured with 630 processes: 2.2 % and 52 MB, see "What the TUI costs") |
 | One-shot command | about 300 ms (the 250 ms window plus reading); default output 12 lines or fewer |
 | `pulse run` sampling | under 1 % of the measured command's CPU time |
 

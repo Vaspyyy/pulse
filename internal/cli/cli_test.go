@@ -23,83 +23,12 @@ var update = flag.Bool("update", false, "rewrite the golden files in testdata")
 const (
 	gib         = 1 << 30
 	mib         = 1 << 20
-	base        = "user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice"
-	agentsSlice = base + "/app-t3code-agents.slice"
-	owned       = agentsSlice + "/app-t3code-agents-0123456789ab.slice"
-	claude      = owned + "/t3code-claude-deadbeef.scope"
-	shared      = owned + "/t3code-opencode-11111111.scope"
-	thread      = "1a2b3c4d-1111-4111-8111-111111111111"
+	agentsSlice = collecttest.DeskAgents
+	thread      = collecttest.DeskThread
 )
 
-// desk is a machine like the one Pulse is for: a browser, a Steam game,
-// and two T3 agent scopes, one of them building.
-func desk() *collecttest.Machine {
-	m := collecttest.New(16, 62*gib, 38*gib)
-	p := func(pid, ppid int, comm string, rssMB, sharedMB uint64, args ...string) collecttest.P {
-		return collecttest.P{PID: pid, PPID: ppid, Comm: comm, Args: args, Start: uint64(pid) * 100,
-			RSS: rssMB * mib, Shared: sharedMB * mib, Cgroup: "user.slice/session.scope"}
-	}
-	add := func(p collecttest.P, change ...func(*collecttest.P)) {
-		for _, c := range change {
-			c(&p)
-		}
-		m.Add(p)
-	}
-	in := func(cgroup string) func(*collecttest.P) { return func(p *collecttest.P) { p.Cgroup = cgroup } }
-	env := func(k, v string) func(*collecttest.P) {
-		return func(p *collecttest.P) { p.Env = map[string]string{k: v} }
-	}
-
-	add(p(1, 0, "systemd", 14, 10, "/usr/lib/systemd/systemd"), in(""))
-	m.Add(collecttest.P{PID: 2, Comm: "kthreadd", Kernel: true})
-	m.Add(collecttest.P{PID: 3, PPID: 2, Comm: "kworker/0:1", Kernel: true})
-
-	add(p(100, 1, "firefox", 600, 200, "/usr/lib/firefox/firefox"))
-	for pid := 101; pid <= 103; pid++ {
-		add(p(pid, 100, "Web Content", 400, 150, "/usr/lib/firefox/firefox", "-contentproc"))
-	}
-
-	// Steam's client has no app id; the game under its reaper has.
-	add(p(190, 1, "steam", 300, 100, "/home/u/.local/share/Steam/ubuntu12_32/steam"))
-	add(p(200, 190, "reaper", 2, 1, "/home/u/.local/share/Steam/ubuntu12_32/reaper", "SteamLaunch", "AppId=1145360", "--", "proton", "run"))
-	add(p(201, 200, "Hades.exe", 4100, 300, `Z:\games\Hades\Hades.exe`), env("SteamAppId", "1145360"))
-	add(p(202, 200, "wineserver", 30, 10, "/usr/bin/wineserver"), env("SteamAppId", "1145360"))
-
-	// An agent that builds, and runs a test under a headless gamescope:
-	// that's no game.
-	add(p(300, 1, "claude", 500, 60, "/usr/bin/claude", "--output-format", "stream-json"), in(claude), env("T3CODE_THREAD_ID", thread),
-		func(p *collecttest.P) { p.Cwd = "/home/u/.t3/worktrees/pulse/t3-8fd0e007" })
-	add(p(301, 300, "zsh", 6, 4, "/usr/bin/zsh", "-c", "cargo build\nexit"), in(claude), env("T3CODE_THREAD_ID", thread))
-	add(p(302, 301, "cargo", 90, 20, "cargo", "build", "--release"), in(claude), env("T3CODE_THREAD_ID", thread))
-	add(p(303, 302, "rustc", 2100, 40, "rustc", "--crate-name", "syn", "--edition=2021"), in(claude))
-	add(p(304, 302, "rustc", 1400, 40, "rustc", "--crate-name", "pulse"), in(claude))
-	for pid := 305; pid <= 308; pid++ {
-		add(p(pid, 302, "cc", 60, 8, "cc", "-c", "x.c"), in(claude))
-	}
-	add(p(309, 301, "gamescope", 80, 30, "gamescope", "--backend", "headless", "--", "godot", "--headless"), in(claude))
-	add(p(310, 1, "opencode", 180, 30, "/usr/bin/opencode", "serve", "--port=34253"), in(shared))
-
-	// Another user's process: nothing but stat and statm can be read.
-	m.Add(collecttest.P{PID: 400, PPID: 1, Comm: "postgres", Start: 40000, RSS: 200 * mib, Shared: 150 * mib, NoEnv: true})
-
-	m.SysFile("class/hwmon/hwmon2/name", "k10temp\n")
-	m.SysFile("class/hwmon/hwmon2/temp1_input", "61250\n")
-	m.Cgroup(base+"/cpu.weight", "10\n")
-	m.Cgroup(base+"/io.weight", "default 10\n")
-	m.Cgroup(base+"/pids.max", "127955\n")
-	m.Cgroup(agentsSlice+"/memory.high", fmt.Sprint(58061*mib)+"\n")
-	m.Cgroup(agentsSlice+"/memory.max", fmt.Sprint(60109*mib)+"\n")
-	m.Cgroup(agentsSlice+"/memory.current", fmt.Sprint(6963*mib)+"\n")
-	m.Cgroup(claude+"/cgroup.procs", "300\n301\n302\n303\n304\n305\n306\n307\n308\n309\n")
-	m.Cgroup(claude+"/memory.current", fmt.Sprint(6656*mib)+"\n")
-	m.Cgroup(claude+"/memory.events", "oom 0\noom_kill 1\n")
-	m.Cgroup(shared+"/cgroup.procs", "310\n")
-	m.Cgroup(shared+"/memory.current", fmt.Sprint(300*mib)+"\n")
-	return m
-}
-
-// work is a quarter of a second of the desk's load.
-var work = map[int]uint64{201: 50, 202: 2, 303: 25, 304: 23, 305: 22, 306: 22, 307: 22, 308: 22, 302: 3, 101: 9, 100: 1}
+// The machine most tests run on, and a quarter of a second of its load.
+var desk, work = collecttest.Desk, collecttest.DeskWork
 
 // deskGPU is the desk's GPU while the game runs.
 func deskGPU(env *Env) {
@@ -272,7 +201,7 @@ func TestGPULoad(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	cfg, problems := parseConfig(`
+	cfg, problems := ParseConfig(`
 # my limits
 cpu_busy = 75          # percent
 memory_pressure=5

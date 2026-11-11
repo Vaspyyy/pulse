@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -28,11 +29,15 @@ type Roots struct {
 	// PageSize is the size of the pages statm counts, in bytes. 0 means
 	// the running kernel's.
 	PageSize int
+	// procDir is where Proc is on disk, for the running machine's roots:
+	// the files read for every process at every reading are then read
+	// with three system calls each instead of the six of os.ReadFile.
+	procDir string
 }
 
 // Live returns the running machine's roots.
 func Live() Roots {
-	return Roots{Proc: os.DirFS("/proc"), Sys: os.DirFS("/sys")}
+	return Roots{Proc: os.DirFS("/proc"), Sys: os.DirFS("/sys"), procDir: "/proc"}
 }
 
 // Cgroup returns the cgroup2 root, /sys/fs/cgroup.
@@ -60,7 +65,14 @@ type Snapshot struct {
 	Cores    []CPUTimes
 	Mem      Memory
 	Pressure Pressure
+	Net      IO        // bytes received and sent on physical network interfaces since boot
+	Disk     IO        // bytes read from and written to whole disks since boot
 	Procs    []Process // ascending by pid
+}
+
+// IO counts bytes in and out since boot.
+type IO struct {
+	In, Out uint64
 }
 
 // CPUTimes are tick counters since boot.
@@ -92,12 +104,51 @@ type Collector struct {
 	// Markers are the environment variables to keep. Set it before the
 	// first snapshot.
 	Markers []string
+	// SharedEvery makes Snapshot read a process's shared memory (statm)
+	// only at every n-th reading, a different share of the processes each
+	// time, and take the one before in between; the resident size is fresh
+	// at every reading either way. 0 reads it every time. A monitor sets
+	// it: at one reading a second, statm is a third of what Pulse costs.
+	SharedEvery int
 
 	roots       Roots
 	pageSize    uint64
 	cpuTempFile string // "" until looked for, "-" when there is none
 	bootID      string
 	static      map[procKey]*static
+	buf         []byte // readProc's, reused
+	readings    uint64 // snapshots so far
+}
+
+// readProc reads a small single-record file of /proc, such as a process's
+// stat. The result is valid until the next call.
+func (c *Collector) readProc(name string) ([]byte, error) {
+	if c.roots.procDir == "" {
+		return fs.ReadFile(c.roots.Proc, name)
+	}
+	fd, err := syscall.Open(c.roots.procDir+"/"+name, syscall.O_RDONLY|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer syscall.Close(fd)
+	if c.buf == nil {
+		c.buf = make([]byte, 4096)
+	}
+	for n := 0; ; {
+		got, err := syscall.Read(fd, c.buf[n:])
+		if err == syscall.EINTR {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		n += got
+		// The kernel gives such a file whole in one read, if there is room.
+		if got == 0 || n < len(c.buf) {
+			return c.buf[:n], nil
+		}
+		c.buf = append(c.buf, make([]byte, len(c.buf))...)
+	}
 }
 
 // New returns a collector for roots.
@@ -126,8 +177,71 @@ func (c *Collector) Snapshot() *Snapshot {
 		IO:     c.readPressure("pressure/io"),
 	}
 	s.CPUTemp = c.readCPUTemp()
+	c.readNet(s)
+	c.readDisks(s)
 	c.readProcs(s)
+	c.readings++
 	return s
+}
+
+// readNet sums /proc/net/dev over the interfaces that are hardware:
+// those with a device in /sys/class/net. Loopback, bridges and tunnels
+// would count the same bytes again.
+func (c *Collector) readNet(s *Snapshot) {
+	b, err := fs.ReadFile(c.roots.Proc, "net/dev")
+	if err != nil {
+		return
+	}
+	_, known := fs.Stat(c.roots.Sys, "class/net")
+	for line := range strings.SplitSeq(string(b), "\n") {
+		name, rest, ok := strings.Cut(line, ":")
+		name = strings.TrimSpace(name)
+		f := strings.Fields(rest)
+		if !ok || len(f) < 9 || name == "lo" {
+			continue
+		}
+		if known == nil {
+			if _, err := fs.Stat(c.roots.Sys, path.Join("class/net", name, "device")); err != nil {
+				continue
+			}
+		}
+		rx, _ := strconv.ParseUint(f[0], 10, 64)
+		tx, _ := strconv.ParseUint(f[8], 10, 64)
+		s.Net.In += rx
+		s.Net.Out += tx
+	}
+}
+
+// virtualDisks are block devices that sit on top of others or on memory.
+var virtualDisks = []string{"loop", "ram", "zram", "dm-", "md", "sr", "nbd"}
+
+// readDisks sums /proc/diskstats over whole physical disks (the entries
+// of /sys/block, without the virtual ones), in bytes.
+func (c *Collector) readDisks(s *Snapshot) {
+	b, err := fs.ReadFile(c.roots.Proc, "diskstats")
+	if err != nil {
+		return
+	}
+next:
+	for line := range strings.SplitSeq(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 10 {
+			continue
+		}
+		for _, v := range virtualDisks {
+			if strings.HasPrefix(f[2], v) {
+				continue next
+			}
+		}
+		if _, err := fs.Stat(c.roots.Sys, path.Join("block", f[2])); err != nil {
+			continue // a partition
+		}
+		// In 512-byte sectors, whatever the disk's own sector size.
+		rd, _ := strconv.ParseUint(f[5], 10, 64)
+		wr, _ := strconv.ParseUint(f[9], 10, 64)
+		s.Disk.In += rd * 512
+		s.Disk.Out += wr * 512
+	}
 }
 
 // cpuSensors are the hwmon drivers whose first temperature is the CPU's:

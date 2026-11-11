@@ -2,7 +2,11 @@
 
 # Pulse
 
-Pulse says what is using this machine, in a dozen lines: for AI coding agents, which pay for every line they read, and for scripts. A TUI for people comes later.
+Pulse says what is using this machine. On a terminal it is a full-screen monitor; for AI coding agents, which pay for every line they read, and for scripts it is a dozen lines.
+
+![The monitor's overview: CPU, memory, GPU, network and disk graphs over the heaviest groups of processes](assets/tui.png)
+
+Agents and scripts get the card instead (`pulse -A` prints it on a terminal too):
 
 ```
 $ pulse
@@ -24,6 +28,32 @@ It's a personal tool for one Linux machine where agents run in [T3 Code](https:/
 go install github.com/Vaspyyy/pulse@latest
 ln -s "$PWD/skill" ~/.claude/skills/pulse   # from a checkout, for agents
 ```
+
+## The monitor
+
+`pulse` alone on a terminal opens it (`pulse tui` does the same from anywhere). It reads the machine once a second and has four tabs:
+
+| Tab | Shows |
+| --- | --- |
+| Overview | CPU with a meter for every core, memory and swap, GPU power and VRAM, network and disk rates, each with its last minutes as a graph, over the heaviest groups and how each did in the last half minute |
+| Processes | groups (a game, T3's agents, a program with its helpers), every process, or the tree; beside the list, everything known about the selected line: command, state, agent thread, game, cgroup |
+| Agents | T3 Code's agents by thread, their memory against T3's limit, what the selected agent runs and how its CPU and memory went lately |
+| Runs | what `pulse run` recorded, with CPU and memory over time; two marked runs are compared |
+
+| Key | Does |
+| --- | --- |
+| `1` to `4`, `tab` | switch tabs |
+| arrows, `j` `k`, `pgup` `pgdn`, `g` `G`, mouse | move; a click selects, the wheel scrolls |
+| `enter` | open or close a group |
+| `v` | groups, all processes, or the tree |
+| `s` | sort by CPU, memory or GPU |
+| `/` | filter by name; `esc` clears it |
+| `x` | end the selected process, after asking: `enter` sends SIGTERM, `shift+k` SIGKILL |
+| `space` | mark a run; two marked runs are compared |
+| `t` | the next theme: mocha, tokyo, gruvbox, latte, or the terminal's own colours |
+| `?` `q` | help, quit |
+
+The theme and the tab are remembered. `theme = gruvbox` in the config file sets the theme to start with, and with `NO_COLOR` set Pulse keeps to the terminal's colours.
 
 ## Commands
 
@@ -62,12 +92,15 @@ Inside a T3 agent, a run gets a cgroup of its own below the agent's scope, so it
 
 GPU numbers come from NVML for NVIDIA (loaded at runtime, no cgo) and from sysfs for AMD. When "busy" starts, and which other programs count as games, is set in `~/.config/pulse-monitor/config`: `pulse help config` lists the keys.
 
-[skill/SKILL.md](skill/SKILL.md) explains the output. [docs/design.md](docs/design.md) is the plan: what exists is milestones M0 and M2 plus GPU and temperatures; the TUI and the Prism integration are still to come.
+[skill/SKILL.md](skill/SKILL.md) explains the output. [docs/design.md](docs/design.md) is the plan: what exists is milestones M0, M1 and M2; the Prism integration is still to come.
 
 ## Development
 
 ```sh
 go test ./...                             # inside a T3 agent, this also checks the live T3 layout; with an NVIDIA GPU, a live NVML reading
 go test ./internal/cli -update            # rewrite the golden outputs
+go test ./internal/tui -update            # rewrite the monitor's golden frames
 go test ./collect/t3 -capture 2026-12-01  # save today's T3 layout as a fixture
 ```
+
+No test opens a window or a terminal: the monitor's tests draw its frames in memory. To see where its time goes, `PULSE_PROFILE=cpu.prof pulse` writes the monitor's CPU profile (and its heap to `cpu.prof.heap` when it quits), and `PULSE_LIVE_BENCH=1 go test ./internal/tui -run xxx -bench Live` times one reading and one frame on the running machine.

@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Runs ──────────────────────────── 3 recorded ─╮╭─ Compared ─────────────────────────────────────────── esc lets go ─╮
+│   WHEN         COMMAND           TIME     PEAK ││ cargo test in pulse: abc123f (r9q4xt, 11-09 22:40) vs abc123f      │
+│ ① 11-09 22:40  cargo test      61.0 s  11.5 GB ││ (r7k2mq, 11-08 21:14)                                              │
+│ ② 11-08 21:14  cargo test      48.2 s   8.9 GB ││                                                                    │
+│   11-07 09:05  make -j8         1.2 s   300 MB ││                  ① before           ② after                change  │
+│                                                ││ wall             61.0 s             48.2 s                  -21 %  │
+│                                                ││ cpu              701 s              653 s                    -7 %  │
+│                                                ││ peak memory      11.5 GB            8.9 GB                -2.6 GB  │
+│                                                ││ largest process  pulse-test 4.4 GB  rustc syn 2.1 GB      -2.3 GB  │
+│                                                ││ stalled          cpu 9.8 s, memor…  cpu 2.1 s, memor…              │
+│                                                ││ written          3.4 GB             3.4 GB             about the…  │
+│                                                ││ other load       a game (Hades), …  0.4 cores on ave…              │
+│                                                ││                                                                    │
+│                                                ││ ! r9q4xt overlapped other load, so its wall time isn't comparable  │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+│                                                ││                                                                    │
+╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  space mark two to compare  ·  t theme  ·  ? help  ·  q quit

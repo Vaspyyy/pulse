@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/ebitengine/purego"
@@ -134,7 +135,7 @@ func readNVML() []Device {
 		if l.powerLimit != nil && l.powerLimit(dev, &mw) == nvmlSuccess {
 			d.PowerLimit = float64(mw) / 1000
 		}
-		d.Procs = l.procs(dev)
+		d.Procs = l.procsLately(dev)
 		out = append(out, d)
 	}
 	return out
@@ -142,6 +143,32 @@ func readNVML() []Device {
 
 // procs merges a device's graphics and compute processes (a process can
 // be both, with the same memory in each list) and their utilisation.
+// procsEvery is how old a GPU's process list may be. Asking for it is by
+// far the slowest part of a reading, and who holds how much VRAM changes
+// slowly; a monitor that reads every second asks every third time.
+const procsEvery = 2500 * time.Millisecond
+
+var lately struct {
+	sync.Mutex
+	at    map[uintptr]time.Time
+	procs map[uintptr][]Proc
+}
+
+// procsLately is procs, from at most procsEvery ago.
+func (l *nvmlLib) procsLately(dev uintptr) []Proc {
+	lately.Lock()
+	defer lately.Unlock()
+	if at, ok := lately.at[dev]; ok && time.Since(at) < procsEvery {
+		return slices.Clone(lately.procs[dev])
+	}
+	if lately.at == nil {
+		lately.at, lately.procs = map[uintptr]time.Time{}, map[uintptr][]Proc{}
+	}
+	p := l.procs(dev)
+	lately.at[dev], lately.procs[dev] = time.Now(), p
+	return slices.Clone(p)
+}
+
 func (l *nvmlLib) procs(dev uintptr) []Proc {
 	byPID := map[int]*Proc{}
 	get := func(pid uint32) *Proc {
@@ -176,26 +203,20 @@ func (l *nvmlLib) procs(dev uintptr) []Proc {
 	return out
 }
 
-// sized calls an NVML list function the way it wants: once to learn how
-// many entries there are, then with room for them. The list can grow in
-// between, so it leaves some room and tries again if that wasn't enough.
+// sized calls an NVML list function with room for 64 entries, which is
+// nearly always enough and saves the call that only asks how many there
+// are: each call is a round trip to the driver. Where it isn't enough,
+// NVML says how many it has, and sized tries again with room for those.
 func sized[T any](call func(count *uint32, buf unsafe.Pointer) int32, _ T) []T {
-	var count uint32
-	switch call(&count, nil) {
-	case nvmlSuccess:
-		return nil // nothing to list
-	case nvmlInsufficientSize:
-	default:
-		return nil
-	}
+	count := uint32(64)
 	for range 3 {
-		buf := make([]T, count+8)
-		n := uint32(len(buf))
+		buf := make([]T, count)
+		n := count
 		switch call(&n, unsafe.Pointer(&buf[0])) {
 		case nvmlSuccess:
 			return buf[:min(int(n), len(buf))]
 		case nvmlInsufficientSize:
-			count = max(n, count*2)
+			count = max(n+8, count*2)
 		default:
 			return nil
 		}

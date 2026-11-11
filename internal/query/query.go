@@ -19,11 +19,16 @@ type View struct {
 	Snap   *collect.Snapshot
 	Window time.Duration // 0 when there was only one reading: no rates
 	NCPU   int
-	Cores  float64    // CPUs busy over the window, machine-wide
-	Procs  []Proc     // ascending by pid
-	T3     *t3.Layout // nil when T3 runs no agents here
-	Games  []Game
-	GPUs   []gpu.Device // empty when there's no GPU reading
+	Cores  float64 // CPUs busy over the window, machine-wide
+	// CoreBusy is each CPU's busy share over the window, 0 to 1.
+	CoreBusy []float64
+	// Net and Disk are bytes per second over the window: received and
+	// sent, read and written.
+	NetIn, NetOut, DiskIn, DiskOut float64
+	Procs                          []Proc     // ascending by pid
+	T3                             *t3.Layout // nil when T3 runs no agents here
+	Games                          []Game
+	GPUs                           []gpu.Device // empty when there's no GPU reading
 
 	byPID    map[int]int // index into Procs
 	children map[int][]int
@@ -64,6 +69,20 @@ func NewView(prev, cur *collect.Snapshot, roots collect.Roots, o Options) *View 
 		for i := range prev.Procs {
 			old[prev.Procs[i].PID] = &prev.Procs[i]
 		}
+		v.CoreBusy = make([]float64, len(cur.Cores))
+		for i, c := range cur.Cores {
+			if i < len(prev.Cores) && c.All > prev.Cores[i].All {
+				v.CoreBusy[i] = float64(c.Busy-prev.Cores[i].Busy) / float64(c.All-prev.Cores[i].All)
+			}
+		}
+		rate := func(now, before uint64) float64 {
+			if now < before {
+				return 0 // a counter that restarted
+			}
+			return float64(now-before) / v.Window.Seconds()
+		}
+		v.NetIn, v.NetOut = rate(cur.Net.In, prev.Net.In), rate(cur.Net.Out, prev.Net.Out)
+		v.DiskIn, v.DiskOut = rate(cur.Disk.In, prev.Disk.In), rate(cur.Disk.Out, prev.Disk.Out)
 	}
 	v.Procs = make([]Proc, len(cur.Procs))
 	for i := range cur.Procs {

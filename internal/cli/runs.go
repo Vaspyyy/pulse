@@ -20,7 +20,7 @@ func (env Env) store() record.Store {
 // runCommand is pulse run [-n name] [--] command…: it runs the command,
 // prints what it used on stderr, keeps the record, and exits as the
 // command did.
-func runCommand(args []string, env Env, cfg config) int {
+func runCommand(args []string, env Env, cfg Config) int {
 	name := ""
 	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
 		flag, val, hasVal := strings.Cut(args[0], "=")
@@ -61,7 +61,7 @@ func runCommand(args []string, env Env, cfg config) int {
 		}
 		return 126
 	}
-	head := fmt.Sprintf("pulse: %s, %s, %s", commandLine(r, 60), exitText(r), dur(r.WallMS))
+	head := fmt.Sprintf("pulse: %s, %s, %s", CommandLine(r, 60), ExitText(r), Dur(r.WallMS))
 	if err := env.store().Save(r); err != nil {
 		head += fmt.Sprintf(", not recorded (%v)", err)
 	} else {
@@ -71,7 +71,7 @@ func runCommand(args []string, env Env, cfg config) int {
 		}
 	}
 	fmt.Fprintln(env.Stderr, head)
-	for _, l := range summary(r) {
+	for _, l := range Summary(r) {
 		fmt.Fprintln(env.Stderr, l)
 	}
 	report{next: []next{{"pulse show " + r.ID, "per-process breakdown and timeline"}}}.print(env.Stderr, defaultBudget)
@@ -79,11 +79,11 @@ func runCommand(args []string, env Env, cfg config) int {
 }
 
 // commandLine is a run's command on one line, at most n characters.
-func commandLine(r *record.Run, n int) string {
+func CommandLine(r *record.Run, n int) string {
 	return clip(strings.Join(strings.Fields(strings.Join(r.Command, " ")), " "), n)
 }
 
-func exitText(r *record.Run) string {
+func ExitText(r *record.Run) string {
 	if r.Signal != "" {
 		return "killed by " + r.Signal
 	}
@@ -91,14 +91,14 @@ func exitText(r *record.Run) string {
 }
 
 // summary is a run's numbers, a line each.
-func summary(r *record.Run) []string {
+func Summary(r *record.Run) []string {
 	wall := float64(r.WallMS) / 1000
 	avg := 0.0
 	if wall > 0 {
 		avg = float64(r.CPUMS()) / 1000 / wall
 	}
 	out := []string{fmt.Sprintf("  cpu    %s (%s user, %s sys), %.1f cores on average",
-		dur(r.CPUMS()), durBare(r.UserMS), durBare(r.SystemMS), avg)}
+		Dur(r.CPUMS()), durBare(r.UserMS), durBare(r.SystemMS), avg)}
 
 	peak := fmt.Sprintf("  peak   %s private memory (sampled every %d ms)", query.Bytes(r.PeakPrivate), r.SampleMS)
 	if r.Samples == 0 || r.PeakPrivate == 0 {
@@ -114,7 +114,7 @@ func summary(r *record.Run) []string {
 	}
 	out = append(out, peak)
 	if s := r.Stall; s != nil {
-		out = append(out, fmt.Sprintf("  stall  cpu %s, memory %s, io %s", dur(s.CPUMS), dur(s.MemoryMS), dur(s.IOMS)))
+		out = append(out, fmt.Sprintf("  stall  cpu %s, memory %s, io %s", Dur(s.CPUMS), Dur(s.MemoryMS), Dur(s.IOMS)))
 	}
 	if r.ReadBytes > 0 || r.WrittenBytes > 0 {
 		out = append(out, fmt.Sprintf("  io     %s read, %s written", query.Bytes(r.ReadBytes), query.Bytes(r.WrittenBytes)))
@@ -155,7 +155,7 @@ func otherText(r *record.Run, long bool) string {
 }
 
 // dur formats milliseconds: 48.2 s, 653 s, 21.5 min, 3.2 h.
-func dur(ms int64) string { return durBare(ms) + durUnit(ms) }
+func Dur(ms int64) string { return durBare(ms) + durUnit(ms) }
 
 func durUnit(ms int64) string {
 	switch s := float64(ms) / 1000; {
@@ -183,10 +183,10 @@ func durBare(ms int64) string {
 	}
 }
 
-func when(t time.Time) string { return t.Local().Format("01-02 15:04") }
+func When(t time.Time) string { return t.Local().Format("01-02 15:04") }
 
 // place names where a run ran: the repository (or directory) and commit.
-func place(r *record.Run) string {
+func Place(r *record.Run) string {
 	if r.Repo == nil {
 		return project(r.Cwd)
 	}
@@ -216,8 +216,8 @@ func runs(env Env) report {
 		if r.Other.Disturbed {
 			mark = "other load"
 		}
-		rows = append(rows, []string{r.ID, when(r.Start), commandLine(r, 32), exitText(r),
-			dur(r.WallMS), dur(r.CPUMS()) + " cpu", query.Bytes(r.PeakPrivate), place(r), r.Name, mark})
+		rows = append(rows, []string{r.ID, When(r.Start), CommandLine(r, 32), ExitText(r),
+			Dur(r.WallMS), Dur(r.CPUMS()) + " cpu", query.Bytes(r.PeakPrivate), Place(r), r.Name, mark})
 	}
 	rep := report{body: table(rows, "llllrrrlll")}
 	rep.next = append(rep.next, next{"pulse show " + all[0].ID, "the newest run in detail"})
@@ -272,16 +272,16 @@ func show(env Env, ref string) (report, error) {
 	if err != nil {
 		return report{}, err
 	}
-	head := fmt.Sprintf("%s in %s", commandLine(r, 60), place(r))
+	head := fmt.Sprintf("%s in %s", CommandLine(r, 60), Place(r))
 	if r.Repo != nil && r.Repo.Branch != "" {
 		head += " (" + r.Repo.Branch + ")"
 	}
-	head += ", " + when(r.Start) + ", " + r.ID
+	head += ", " + When(r.Start) + ", " + r.ID
 	if r.Name != "" {
 		head += " (" + r.Name + ")"
 	}
-	rep := report{body: []string{head, exitText(r) + ", " + dur(r.WallMS)}}
-	rep.body = append(rep.body, summary(r)...)
+	rep := report{body: []string{head, ExitText(r) + ", " + Dur(r.WallMS)}}
+	rep.body = append(rep.body, Summary(r)...)
 
 	if len(r.Procs) > 0 {
 		rep.body = append(rep.body, "processes, as sampled")
@@ -291,14 +291,14 @@ func show(env Env, ref string) (report, error) {
 			if p.Count > 1 {
 				label += fmt.Sprintf(" ×%d", p.Count)
 			}
-			rows = append(rows, []string{"  " + label, dur(p.CPUMS) + " cpu", query.Bytes(p.PeakRSS) + " at most"})
+			rows = append(rows, []string{"  " + label, Dur(p.CPUMS) + " cpu", query.Bytes(p.PeakRSS) + " at most"})
 		}
 		rep.body = append(rep.body, table(rows, "lrr")...)
 		if more := len(r.Procs) - min(len(r.Procs), 6) + r.MoreProcs; more > 0 {
 			rep.body = append(rep.body, fmt.Sprintf("  and %d more kinds", more))
 		}
 		if r.UnsampledMS*20 > r.CPUMS() && r.UnsampledMS > 100 {
-			rep.body = append(rep.body, fmt.Sprintf("  %s cpu wasn't caught: processes too short-lived to sample, or after their last sample", dur(r.UnsampledMS)))
+			rep.body = append(rep.body, fmt.Sprintf("  %s cpu wasn't caught: processes too short-lived to sample, or after their last sample", Dur(r.UnsampledMS)))
 		}
 	}
 	if t := r.Timeline; len(t.Cores) > 1 {
@@ -307,7 +307,7 @@ func show(env Env, ref string) (report, error) {
 			topCores = max(topCores, c)
 		}
 		rep.body = append(rep.body,
-			fmt.Sprintf("over time, %s per block", dur(int64(t.StepMS)*int64(len(t.Cores))/int64(min(len(t.Cores), 60)))),
+			fmt.Sprintf("over time, %s per block", Dur(int64(t.StepMS)*int64(len(t.Cores))/int64(min(len(t.Cores), 60)))),
 			fmt.Sprintf("  cores  %s  up to %.1f", spark(t.Cores, 60), topCores),
 			fmt.Sprintf("  memory %s  up to %s", spark(t.Private, 60), query.Bytes(r.PeakPrivate)))
 	}
@@ -331,7 +331,7 @@ func diff(env Env, refs []string) (report, error) {
 			a, err = st.Find(refs[0])
 		} else if a = earlier(st.List(), b); a == nil {
 			err = fmt.Errorf("%s (%s) is the only recorded run of that command here; pulse runs lists what there is",
-				b.ID, commandLine(b, 40))
+				b.ID, CommandLine(b, 40))
 		}
 	case 2:
 		if a, err = st.Find(refs[0]); err == nil {
@@ -344,20 +344,35 @@ func diff(env Env, refs []string) (report, error) {
 		return report{}, err
 	}
 
+	head, rows, notes := DiffRows(a, b)
+	rep := report{body: append([]string{head}, table(rows, "llll")...)}
+	for _, n := range notes {
+		rep.body = append(rep.body, "note: "+n)
+	}
+	if a.Repo != nil && b.Repo != nil && a.Repo.Root == b.Repo.Root && a.Repo.Head != b.Repo.Head {
+		rep.next = append(rep.next, next{"recap " + short7(a.Repo.Head) + ".." + short7(b.Repo.Head), "what changed between the two runs"})
+	}
+	rep.next = append(rep.next, next{"pulse show " + b.ID, "the second run in detail"})
+	return rep, nil
+}
+
+// DiffRows compares two runs: a heading, a table (its first row names the
+// columns) and notes on what doesn't compare.
+func DiffRows(a, b *record.Run) (head string, rows [][]string, notes []string) {
 	side := func(r *record.Run) string {
-		id := r.ID + ", " + when(r.Start)
+		id := r.ID + ", " + When(r.Start)
 		if r.Repo != nil {
 			return short7(r.Repo.Head) + " (" + id + ")"
 		}
 		return id
 	}
-	head := side(a) + " vs " + side(b)
+	head = side(a) + " vs " + side(b)
 	if record.Same(a, b) {
 		in := project(a.Cwd)
 		if a.Repo != nil {
 			in = project(a.Repo.Root)
 		}
-		head = commandLine(a, 40) + " in " + in + ": " + head
+		head = CommandLine(a, 40) + " in " + in + ": " + head
 	}
 	percent := func(x, y int64) string {
 		if x <= 0 {
@@ -379,16 +394,16 @@ func diff(env Env, refs []string) (report, error) {
 	largest := func(r *record.Run) string {
 		return strings.TrimSpace(r.LargestName + " " + query.Bytes(r.LargestRSS))
 	}
-	rows := [][]string{
+	rows = [][]string{
 		{"", "before", "after", "change"},
-		{"wall", dur(a.WallMS), dur(b.WallMS), percent(a.WallMS, b.WallMS)},
-		{"cpu", dur(a.CPUMS()), dur(b.CPUMS()), percent(a.CPUMS(), b.CPUMS())},
+		{"wall", Dur(a.WallMS), Dur(b.WallMS), percent(a.WallMS, b.WallMS)},
+		{"cpu", Dur(a.CPUMS()), Dur(b.CPUMS()), percent(a.CPUMS(), b.CPUMS())},
 		{"peak memory", query.Bytes(a.PeakPrivate), query.Bytes(b.PeakPrivate), bytes(a.PeakPrivate, b.PeakPrivate)},
 		{"largest process", largest(a), largest(b), bytes(a.LargestRSS, b.LargestRSS)},
 	}
 	if a.Stall != nil && b.Stall != nil {
 		stalled := func(s *record.Stall) string {
-			return fmt.Sprintf("cpu %s, memory %s, io %s", dur(s.CPUMS), dur(s.MemoryMS), dur(s.IOMS))
+			return fmt.Sprintf("cpu %s, memory %s, io %s", Dur(s.CPUMS), Dur(s.MemoryMS), Dur(s.IOMS))
 		}
 		rows = append(rows, []string{"stalled", stalled(a.Stall), stalled(b.Stall), ""})
 	}
@@ -396,15 +411,13 @@ func diff(env Env, refs []string) (report, error) {
 		rows = append(rows, []string{"written", query.Bytes(a.WrittenBytes), query.Bytes(b.WrittenBytes), bytes(a.WrittenBytes, b.WrittenBytes)})
 	}
 	rows = append(rows, []string{"other load", otherText(a, false), otherText(b, false), ""})
-	rep := report{body: append([]string{head}, table(rows, "llll")...)}
-
-	note := func(format string, args ...any) { rep.body = append(rep.body, "note: "+fmt.Sprintf(format, args...)) }
+	note := func(format string, args ...any) { notes = append(notes, fmt.Sprintf(format, args...)) }
 	if !record.Same(a, b) {
 		note("these aren't the same command in the same directory, so the numbers compare only loosely")
 	}
 	for _, r := range []*record.Run{a, b} {
 		if r.Exit != 0 {
-			note("%s ended with %s, so it may have done less work", r.ID, exitText(r))
+			note("%s ended with %s, so it may have done less work", r.ID, ExitText(r))
 		}
 	}
 	switch {
@@ -418,9 +431,5 @@ func diff(env Env, refs []string) (report, error) {
 	if a.Method != b.Method {
 		note("the runs were measured differently (%s and %s): cpu time of a sampled tree can miss processes", a.Method, b.Method)
 	}
-	if a.Repo != nil && b.Repo != nil && a.Repo.Root == b.Repo.Root && a.Repo.Head != b.Repo.Head {
-		rep.next = append(rep.next, next{"recap " + short7(a.Repo.Head) + ".." + short7(b.Repo.Head), "what changed between the two runs"})
-	}
-	rep.next = append(rep.next, next{"pulse show " + b.ID, "the second run in detail"})
-	return rep, nil
+	return head, rows, notes
 }

@@ -50,7 +50,9 @@ type Env struct {
 
 const usage = `pulse: what is using this machine
 
-  pulse                       the card: load verdict, machine, top groups
+  pulse                       on a terminal: the full-screen monitor (? shows its keys)
+  pulse -A                    the card: load verdict, machine, top groups; it is
+                              also what pulse prints when its output is no terminal
   pulse load                  one line: quiet, or busy with the reasons
   pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
   pulse tree <handle|pid|name>  a process and what it started, with totals
@@ -86,7 +88,7 @@ type options struct {
 func Run(args []string, env Env) int {
 	if len(args) > 0 && args[0] == "run" {
 		// Everything after run's own flags is the command's, untouched.
-		cfg, problems := parseConfig(env.Config)
+		cfg, problems := ParseConfig(env.Config)
 		for _, p := range problems {
 			fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
 		}
@@ -101,7 +103,7 @@ func Run(args []string, env Env) int {
 	if len(o.args) > 0 {
 		cmd, o.args = o.args[0], o.args[1:]
 	}
-	cfg, problems := parseConfig(env.Config)
+	cfg, problems := ParseConfig(env.Config)
 	for _, p := range problems {
 		fmt.Fprintf(env.Stderr, "pulse: %s: %s\n", env.ConfigPath, p)
 	}
@@ -198,7 +200,7 @@ func parse(args []string) (options, error) {
 			}
 			o.by = v
 		case "-A":
-			// The agent card is what Pulse prints anyway until the TUI exists.
+			// The card on a terminal too, where pulse alone opens the monitor.
 		case "-h", "--help":
 			o.args = []string{"help"}
 			return o, nil
@@ -214,7 +216,7 @@ func parse(args []string) (options, error) {
 
 // view takes two readings a window apart, and reads the GPUs meanwhile:
 // their driver averages over its own sample period, so one reading does.
-func view(env Env, cfg config) *query.View {
+func view(env Env, cfg Config) *query.View {
 	c := collect.New(env.Roots)
 	if env.Now != nil {
 		c.Now = env.Now
@@ -396,7 +398,7 @@ func bare(g query.Group) string {
 	return strings.TrimSuffix(g.Label, fmt.Sprintf(" ×%d", g.Total.Count))
 }
 
-func card(v *query.View, cfg config) report {
+func card(v *query.View, cfg Config) report {
 	r := report{body: []string{v.Load(cfg.Thresholds).Line(), machine(v)}}
 	groups := shown(v.Groups("cpu"))
 	groups = groups[:min(len(groups), 5)]

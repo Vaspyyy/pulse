@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Processes ──────────────────────────────────────────────────── tree by cpu ─╮╭─ Selected ───────────────────────────╮
+│ NAME                                  CPU ▾            MEMORY   GPU     VRAM ││ postgres                             │
+│ systemd                      ━━━━━━━━   0.0  ━━━━━━━━   14 MB                ││ 400.gfu                              │
+│ ├─ claude                    ━━━━━━━━   0.0  ━━━━━━━━  500 MB                ││                                      │
+│ │  └─ zsh -c                 ━━━━━━━━   0.0  ━━━━━━━━    6 MB                ││ cpu      ━━━━━━━━━━━━━━━   0.0 cores │
+│ │     ├─ cargo build         ━━━━━━━━   0.1  ━━━━━━━━   90 MB                ││ memory   ━━━━━━━━━━━━━━━      200 MB │
+│ │     │  ├─ cc ×4            ━━━━━━━━   3.5  ━━━━━━━━  208 MB                ││          50 MB of it private         │
+│ │     │  ├─ rustc syn        ━━━━━━━━   1.0  ━━━━━━━━  2.1 GB                ││                                      │
+│ │     │  └─ rustc pulse      ━━━━━━━━   0.9  ━━━━━━━━  1.4 GB                ││ state    sleeping · 1 threads        │
+│ │     └─ gamescope           ━━━━━━━━   0.0  ━━━━━━━━   80 MB                ││ started  53 min ago                  │
+│ ├─ steam                     ━━━━━━━━   0.0  ━━━━━━━━  300 MB                ││                                      │
+│ │  └─ reaper                 ━━━━━━━━   0.0  ━━━━━━━━    2 MB                ││                                      │
+│ │     ├─ Hades.exe           ━━━━━━━━   2.0  ━━━━━━━━  4.0 GB   68%   5.1 GB ││                                      │
+│ │     └─ wineserver          ━━━━━━━━   0.1  ━━━━━━━━   30 MB                ││                                      │
+│ ├─ firefox                   ━━━━━━━━   0.0  ━━━━━━━━  600 MB    3%   300 MB ││                                      │
+│ │  └─ firefox ×3             ━━━━━━━━   0.4  ━━━━━━━━  750 MB                ││                                      │
+│ ├─ opencode                  ━━━━━━━━   0.0  ━━━━━━━━  180 MB                ││                                      │
+│ └─ postgres                  ━━━━━━━━   0.0  ━━━━━━━━  200 MB                ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  enter open  ·  / filter  ·  s sort  ·  v view  ·  x end  ·  t theme  ·  ? help  ·  q quit

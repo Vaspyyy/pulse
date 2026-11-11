@@ -2,6 +2,7 @@ package collect_test
 
 import (
 	"testing"
+	"testing/fstest"
 
 	"github.com/Vaspyyy/pulse/collect"
 	"github.com/Vaspyyy/pulse/collect/collecttest"
@@ -21,8 +22,24 @@ func TestSnapshot(t *testing.T) {
 	m.SysFile("class/hwmon/hwmon0/temp1_input", "33000\n")
 	m.SysFile("class/hwmon/hwmon2/name", "k10temp\n")
 	m.SysFile("class/hwmon/hwmon2/temp1_input", "61500\n")
+	m.Proc["net/dev"] = &fstest.MapFile{Data: []byte("Inter-|   Receive |  Transmit\n face |bytes ...\n" +
+		"    lo: 900 1 0 0 0 0 0 0 900 1 0 0 0 0 0 0\n" +
+		"enp5s0: 5000 9 0 0 0 0 0 0 700 4 0 0 0 0 0 0\n" +
+		"docker0: 300 2 0 0 0 0 0 0 300 2 0 0 0 0 0 0\n")}
+	m.SysFile("class/net/enp5s0/device/vendor", "0x8086\n")
+	m.SysFile("class/net/docker0/mtu", "1500\n")
+	m.Proc["diskstats"] = &fstest.MapFile{Data: []byte(
+		" 259 0 nvme0n1 100 0 2000 50 80 0 4000 60 0 0 0\n" +
+			" 259 1 nvme0n1p1 90 0 1800 40 70 0 3000 50 0 0 0\n" +
+			" 254 0 zram0 10 0 80 1 10 0 80 1 0 0 0\n")}
+	m.SysFile("block/nvme0n1/size", "1\n")
+	m.SysFile("block/zram0/size", "1\n")
 	c := collect.New(m.Roots())
 	s := c.Snapshot()
+	// Hardware only: no loopback or bridge, no partition or zram.
+	if s.Net != (collect.IO{In: 5000, Out: 700}) || s.Disk != (collect.IO{In: 2000 * 512, Out: 4000 * 512}) {
+		t.Errorf("net %+v, disk %+v", s.Net, s.Disk)
+	}
 	if s.CPUTemp != 61.5 {
 		t.Errorf("CPU at %.1f°C, want 61.5 from k10temp", s.CPUTemp)
 	}
@@ -96,5 +113,49 @@ func TestHandle(t *testing.T) {
 	}
 	if pid, letters, ok := collect.ParseHandle("77"); !ok || pid != 77 || letters != "" {
 		t.Errorf("bare pid: %d %q %v", pid, letters, ok)
+	}
+}
+
+// TestSharedEvery: a monitor reads statm only every few readings. The
+// resident size is fresh every time, the shared part follows.
+func TestSharedEvery(t *testing.T) {
+	const mib = 1 << 20
+	m := collecttest.New(4, 8192*mib, 4096*mib)
+	p := collecttest.P{PID: 10, PPID: 1, Comm: "grow", Args: []string{"grow"}, Start: 500, RSS: 100 * mib, Shared: 40 * mib}
+	m.Add(p)
+	c := collect.New(m.Roots())
+	c.SharedEvery = 3
+	find := func() collect.Process {
+		for _, p := range c.Snapshot().Procs {
+			if p.PID == 10 {
+				return p
+			}
+		}
+		t.Fatal("pid 10 is missing")
+		return collect.Process{}
+	}
+	if got := find(); got.RSS != 100*mib || got.Shared != 40*mib {
+		t.Fatalf("first reading: %d MB resident, %d MB shared", got.RSS/mib, got.Shared/mib)
+	}
+	p.RSS, p.Shared = 200*mib, 90*mib
+	m.Add(p)
+	var shared []uint64
+	for range 3 {
+		got := find()
+		if got.RSS != 200*mib {
+			t.Errorf("resident %d MB, want the 200 of now", got.RSS/mib)
+		}
+		shared = append(shared, got.Shared/mib)
+	}
+	// One of three readings asks statm again, and what it says stays.
+	if shared[0] != 40 || shared[2] != 90 {
+		t.Errorf("shared over three readings: %v MB; want 40 first and 90 in the end", shared)
+	}
+
+	// It never says more is shared than is there.
+	p.RSS, p.Shared = 10*mib, 5*mib
+	m.Add(p)
+	if got := find(); got.RSS != 10*mib || got.Shared > got.RSS {
+		t.Errorf("after shrinking: %d MB resident, %d MB shared", got.RSS/mib, got.Shared/mib)
 	}
 }

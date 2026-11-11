@@ -1,0 +1,38 @@
+ ◆ pulse   Overview   Processes   Agents   Runs     ● busy  a game (Hades) uses 68% GPU, 2.1 cores and 3.7 G…  09:00:00
+╭─ Processes ─────────────────────────────────────────────── processes by mem ─╮╭─ Selected ───────────────────────────╮
+│ NAME                                    CPU          MEMORY ▾   GPU     VRAM ││ Hades.exe                            │
+│ Hades.exe                    ━━━━━━━━   2.0  ━━━━━━━━  4.0 GB   68%   5.1 GB ││ 201.hds                              │
+│ rustc syn                    ━━━━━━━━   1.0  ━━━━━━━━  2.1 GB                ││                                      │
+│ rustc pulse                  ━━━━━━━━   0.9  ━━━━━━━━  1.4 GB                ││ cpu      ━━━━━━━━━━━━━━━   2.0 cores │
+│ claude                       ━━━━━━━━   0.0  ━━━━━━━━  500 MB                ││ memory   ━━━━━━━━━━━━━━━      4.0 GB │
+│ firefox                      ━━━━━━━━   0.0  ━━━━━━━━  600 MB    3%   300 MB ││          3.7 GB of it private        │
+│ firefox                      ━━━━━━━━   0.4  ━━━━━━━━  400 MB                ││ gpu      68% · 5.1 GB vram           │
+│ firefox                      ━━━━━━━━   0.0  ━━━━━━━━  400 MB                ││                                      │
+│ firefox                      ━━━━━━━━   0.0  ━━━━━━━━  400 MB                ││ state    sleeping · 1 threads        │
+│ steam                        ━━━━━━━━   0.0  ━━━━━━━━  300 MB                ││ started  56 min ago                  │
+│ opencode                     ━━━━━━━━   0.0  ━━━━━━━━  180 MB                ││ game     Hades                       │
+│ cargo build                  ━━━━━━━━   0.1  ━━━━━━━━   90 MB                ││                                      │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ command                              │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ Z:\games\Hades\Hades.exe             │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││                                      │
+│ cc                           ━━━━━━━━   0.9  ━━━━━━━━   60 MB                ││ cgroup                               │
+│ gamescope                    ━━━━━━━━   0.0  ━━━━━━━━   80 MB                ││ session.scope                        │
+│ postgres                     ━━━━━━━━   0.0  ━━━━━━━━  200 MB                ││                                      │
+│ wineserver                   ━━━━━━━━   0.1  ━━━━━━━━   30 MB                ││                                      │
+│ systemd                      ━━━━━━━━   0.0  ━━━━━━━━   14 MB                ││                                      │
+│ zsh -c                       ━━━━━━━━   0.0  ━━━━━━━━    6 MB                ││                                      │
+│ reaper                       ━━━━━━━━   0.0  ━━━━━━━━    2 MB                ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+│                                                                              ││                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────╯
+ 1-4 tabs  ·  ↑↓ move  ·  enter open  ·  / filter  ·  s sort  ·  v view  ·  x end  ·  t theme  ·  ? help  ·  q quit
