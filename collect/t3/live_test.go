@@ -61,9 +61,11 @@ func TestLive(t *testing.T) {
 		if !ancestor(own.Agent, os.Getpid()) {
 			t.Errorf("agent pid %d isn't an ancestor of this test (pid %d)", own.Agent, os.Getpid())
 		}
+		// Other scopes may have no thread: T3 starts opencode's server,
+		// which threads share, without the variable.
 		for _, s := range l.Scopes {
 			if s.Agent != 0 && s.ThreadID == "" {
-				t.Errorf("%s: agent %d has no %s", s.Unit, s.Agent, threadVar)
+				t.Logf("%s: no thread known for agent %d", s.Unit, s.Agent)
 			}
 		}
 		t.Logf("%d agent scopes; this one is %s in %s, agent pid %d", len(l.Scopes), own.Unit, own.Slice, own.Agent)
@@ -80,6 +82,12 @@ func TestLive(t *testing.T) {
 		}
 		if lim.IOWeight == 0 || lim.IOWeight >= 100 {
 			t.Errorf("app-t3code.slice io.weight %d; want set and below the default 100", lim.IOWeight)
+		}
+		if l.Memory == 0 || l.Memory > lim.MemoryMax {
+			t.Errorf("agents slice memory.current %d; want above 0 and at most memory.max %d", l.Memory, lim.MemoryMax)
+		}
+		if own != nil && (own.Memory == 0 || own.Memory > l.Memory) {
+			t.Errorf("this scope's memory.current %d; want above 0 and at most the slice's %d", own.Memory, l.Memory)
 		}
 		if lim.PidsMax == 0 {
 			t.Error("app-t3code.slice has no pids.max")
@@ -272,9 +280,9 @@ func writeFixture(t *testing.T, name string, cgroup, proc fs.FS, l *Layout, thre
 	}
 	agents := path.Join(l.Root, agentsSlice)
 	copyCgroup(l.Root, "cpu.weight", "io.weight", "pids.max", "cgroup.controllers", "cgroup.subtree_control")
-	copyCgroup(agents, "memory.high", "memory.max", "cgroup.controllers", "cgroup.subtree_control")
+	copyCgroup(agents, "memory.high", "memory.max", "memory.current", "cgroup.controllers", "cgroup.subtree_control")
 	for _, s := range l.Scopes {
-		copyCgroup(s.Path, "cgroup.procs", "cgroup.controllers", "memory.current", "cpu.stat")
+		copyCgroup(s.Path, "cgroup.procs", "cgroup.controllers", "memory.current", "memory.events", "cpu.stat")
 		b, err := fs.ReadFile(cgroup, path.Join(s.Path, "cgroup.procs"))
 		if err != nil {
 			continue

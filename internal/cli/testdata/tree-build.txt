@@ -1,0 +1,5 @@
+cargo build --release 302.dtj, running 54 min, in agent scope t3code-claude-deadbeef.scope
+total 7 processes, 5.6 cores, 3.6 GB private memory (shared libraries and files not summed)
+├─ cc ×4        3.5 cores  208 MB
+├─ rustc syn    1.0 cores  2.1 GB  303.kme
+└─ rustc pulse  0.9 cores  1.4 GB  304.asw

@@ -40,8 +40,12 @@ var scopeName = regexp.MustCompile(`^t3code-(.+)-[0-9a-f]{8}\.scope$`)
 type Layout struct {
 	// Root is app-t3code.slice's path below the cgroup root, without a
 	// leading slash.
-	Root   string  `json:"root"`
-	Limits Limits  `json:"limits"`
+	Root   string `json:"root"`
+	Limits Limits `json:"limits"`
+	// Memory is what all agents use together, in bytes: the agents slice's
+	// memory.current, the number its limits apply to. It includes the page
+	// cache the agents filled. 0 when unreadable.
+	Memory uint64  `json:"memory"`
 	Scopes []Scope `json:"scopes"`
 }
 
@@ -74,9 +78,15 @@ type Scope struct {
 	// Agent is the scope's top process, the one T3 started: its parent is
 	// outside the scope. 0 when the scope is empty or unreadable.
 	Agent int `json:"agent"`
-	// ThreadID is T3CODE_THREAD_ID from Agent's environment, "" when it
-	// can't be read.
+	// ThreadID is T3CODE_THREAD_ID from Agent's environment. T3 starts
+	// some agents without it (opencode's server, which several threads
+	// share): then it's the id the scope's other processes carry, if they
+	// all carry the same one. "" when the scope's thread isn't known.
 	ThreadID string `json:"thread_id"`
+	// Memory is the scope's memory.current in bytes, and OOMKills how many
+	// of its processes the kernel killed for memory (memory.events).
+	Memory   uint64 `json:"memory"`
+	OOMKills uint64 `json:"oom_kills"`
 }
 
 // Discover reads T3's agent cgroups for uid. cgroup is the cgroup2 root
@@ -104,6 +114,7 @@ func Discover(cgroup, proc fs.FS, uid int) (*Layout, error) {
 			IOWeight:   readIOWeight(cgroup, path.Join(root, "io.weight")),
 			PidsMax:    readLimit(cgroup, path.Join(root, "pids.max")),
 		},
+		Memory: readLimit(cgroup, path.Join(agents, "memory.current")),
 		Scopes: []Scope{},
 	}
 
@@ -118,9 +129,9 @@ func Discover(cgroup, proc fs.FS, uid int) (*Layout, error) {
 		}
 		s := Scope{Unit: unit, Name: m[1], Slice: slice, Path: dir, PIDs: readPIDs(cgroup, path.Join(dir, "cgroup.procs"))}
 		s.Agent = topProcess(proc, s.PIDs)
-		if s.Agent != 0 {
-			s.ThreadID = envVar(proc, s.Agent, threadVar)
-		}
+		s.ThreadID = scopeThread(proc, s.Agent, s.PIDs)
+		s.Memory = readLimit(cgroup, path.Join(dir, "memory.current"))
+		s.OOMKills = readKeyed(cgroup, path.Join(dir, "memory.events"), "oom_kill")
 		l.Scopes = append(l.Scopes, s)
 	}
 	for _, e := range entries {
@@ -189,6 +200,21 @@ func readIOWeight(cgroup fs.FS, name string) uint64 {
 	return 0
 }
 
+// readKeyed reads one "key value" line of a cgroup file.
+func readKeyed(cgroup fs.FS, name, key string) uint64 {
+	b, err := fs.ReadFile(cgroup, name)
+	if err != nil {
+		return 0
+	}
+	for line := range strings.SplitSeq(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, key+" "); ok {
+			n, _ := strconv.ParseUint(strings.TrimSpace(v), 10, 64)
+			return n
+		}
+	}
+	return 0
+}
+
 func readPIDs(cgroup fs.FS, name string) []int {
 	pids := []int{}
 	b, err := fs.ReadFile(cgroup, name)
@@ -218,6 +244,28 @@ func topProcess(proc fs.FS, pids []int) int {
 		}
 	}
 	return top
+}
+
+// scopeThread returns the thread a scope works for: the agent's own thread
+// id, or else the one id all its other processes agree on.
+func scopeThread(proc fs.FS, agent int, pids []int) string {
+	if agent == 0 {
+		return ""
+	}
+	if id := envVar(proc, agent, threadVar); id != "" {
+		return id
+	}
+	only := ""
+	for _, pid := range pids {
+		switch id := envVar(proc, pid, threadVar); {
+		case id == "" || id == only:
+		case only == "":
+			only = id
+		default:
+			return "" // a shared agent working for several threads
+		}
+	}
+	return only
 }
 
 type stat struct {

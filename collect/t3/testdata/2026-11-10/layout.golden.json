@@ -7,6 +7,7 @@
     "io_weight": 10,
     "pids_max": 127955
   },
+  "memory": 0,
   "scopes": [
     {
       "unit": "t3code-claude-e75ed6ee.scope",
@@ -20,7 +21,9 @@
         1858211
       ],
       "agent": 1858091,
-      "thread_id": "5e6f7a8b-2222-4222-8222-222222222222"
+      "thread_id": "5e6f7a8b-2222-4222-8222-222222222222",
+      "memory": 524386304,
+      "oom_kills": 0
     },
     {
       "unit": "t3code-claude-fb0fc8f9.scope",
@@ -40,7 +43,9 @@
         1890047
       ],
       "agent": 1883671,
-      "thread_id": "1a2b3c4d-1111-4111-8111-111111111111"
+      "thread_id": "1a2b3c4d-1111-4111-8111-111111111111",
+      "memory": 828760064,
+      "oom_kills": 0
     }
   ]
 }

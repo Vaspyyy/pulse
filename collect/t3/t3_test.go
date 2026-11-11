@@ -98,20 +98,28 @@ const base = "user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.
 
 // TestDiscoverShapes covers what today's fixture doesn't: a scope directly
 // in the agents slice (T3 does that for scopes that outlive a restart),
-// directories that aren't T3 scopes, "max" limits and an empty scope.
+// directories that aren't T3 scopes, "max" limits, an empty scope, and
+// agents that carry no thread id themselves.
 func TestDiscoverShapes(t *testing.T) {
 	agents := base + "/app-t3code-agents.slice"
 	cg := fstest.MapFS{
-		base + "/cpu.weight":    {Data: []byte("10\n")},
-		base + "/io.weight":     {Data: []byte("default 10\n8:0 200\n")},
-		base + "/pids.max":      {Data: []byte("max\n")},
-		agents + "/memory.high": {Data: []byte("max\n")},
-		agents + "/memory.max":  {Data: []byte("63015084032\n")},
-		agents + "/t3code-codex-0a1b2c3d.scope/cgroup.procs":                                       {Data: []byte("40\n")},
-		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-deadbeef.scope/cgroup.procs": {Data: []byte("31\n30\n")},
-		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-00000000.scope/cgroup.procs": {Data: []byte("")},
-		agents + "/app-t3code-agents-0123456789ab.slice/pulse-r7k2mq/cgroup.procs":                 {Data: []byte("50\n")},
-		agents + "/other.scope/cgroup.procs":                                                       {Data: []byte("60\n")},
+		base + "/cpu.weight":       {Data: []byte("10\n")},
+		base + "/io.weight":        {Data: []byte("default 10\n8:0 200\n")},
+		base + "/pids.max":         {Data: []byte("max\n")},
+		agents + "/memory.high":    {Data: []byte("max\n")},
+		agents + "/memory.max":     {Data: []byte("63015084032\n")},
+		agents + "/memory.current": {Data: []byte("7000000000\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-deadbeef.scope/memory.current": {Data: []byte("3000000000\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-deadbeef.scope/memory.events":  {Data: []byte("low 0\nhigh 4\nmax 0\noom 1\noom_kill 2\noom_group_kill 0\n")},
+		agents + "/t3code-codex-0a1b2c3d.scope/cgroup.procs":                                         {Data: []byte("40\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-deadbeef.scope/cgroup.procs":   {Data: []byte("31\n30\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-claude-00000000.scope/cgroup.procs":   {Data: []byte("")},
+		agents + "/app-t3code-agents-0123456789ab.slice/pulse-r7k2mq/cgroup.procs":                   {Data: []byte("50\n")},
+		agents + "/other.scope/cgroup.procs":                                                         {Data: []byte("60\n")},
+		// opencode's server is shared by threads and has no thread id.
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-opencode-11111111.scope/cgroup.procs": {Data: []byte("70\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-opencode-22222222.scope/cgroup.procs": {Data: []byte("80\n81\n82\n")},
+		agents + "/app-t3code-agents-0123456789ab.slice/t3code-opencode-33333333.scope/cgroup.procs": {Data: []byte("90\n91\n92\n")},
 	}
 	proc := fstest.MapFS{
 		// 30 is the agent (its parent 1 is outside); 31 is its child.
@@ -121,6 +129,21 @@ func TestDiscoverShapes(t *testing.T) {
 		"31/environ": {Data: []byte("T3CODE_THREAD_ID=wrong\x00")},
 		"40/stat":    {Data: []byte(statLine(40, "codex", 2, 100))},
 		// 40's environ is unreadable: no thread id, still a scope.
+		"70/stat":    {Data: []byte(statLine(70, "opencode", 2, 100))},
+		"70/environ": {Data: []byte("HOME=/home/u\x00")},
+		// 80's children agree on a thread, so the scope gets it.
+		"80/stat":    {Data: []byte(statLine(80, "opencode", 2, 100))},
+		"80/environ": {Data: []byte("HOME=/home/u\x00")},
+		"81/stat":    {Data: []byte(statLine(81, "bash", 80, 200))},
+		"81/environ": {Data: []byte("T3CODE_THREAD_ID=aaaaaaaa-0000-4000-8000-000000000001\x00")},
+		"82/stat":    {Data: []byte(statLine(82, "go", 81, 300))},
+		"82/environ": {Data: []byte("T3CODE_THREAD_ID=aaaaaaaa-0000-4000-8000-000000000001\x00")},
+		// 90's children work for two threads, so the scope has none.
+		"90/stat":    {Data: []byte(statLine(90, "opencode", 2, 100))},
+		"91/stat":    {Data: []byte(statLine(91, "bash", 90, 200))},
+		"91/environ": {Data: []byte("T3CODE_THREAD_ID=aaaaaaaa-0000-4000-8000-000000000001\x00")},
+		"92/stat":    {Data: []byte(statLine(92, "bash", 90, 300))},
+		"92/environ": {Data: []byte("T3CODE_THREAD_ID=aaaaaaaa-0000-4000-8000-000000000002\x00")},
 	}
 	l, err := Discover(cg, proc, 1000)
 	if err != nil {
@@ -130,6 +153,12 @@ func TestDiscoverShapes(t *testing.T) {
 	if l.Limits != want {
 		t.Errorf("limits %+v, want %+v", l.Limits, want)
 	}
+	if l.Memory != 7000000000 {
+		t.Errorf("agents use %d bytes, want 7000000000", l.Memory)
+	}
+	if s := l.Scopes[1]; s.Memory != 3000000000 || s.OOMKills != 2 {
+		t.Errorf("%s: memory %d, %d OOM kills; want 3000000000 and 2", s.Unit, s.Memory, s.OOMKills)
+	}
 	var got []string
 	for _, s := range l.Scopes {
 		got = append(got, s.Slice+"/"+s.Unit+" name="+s.Name+" agent="+strconv.Itoa(s.Agent)+" thread="+s.ThreadID)
@@ -137,6 +166,9 @@ func TestDiscoverShapes(t *testing.T) {
 	wantScopes := []string{
 		"app-t3code-agents-0123456789ab.slice/t3code-claude-00000000.scope name=claude agent=0 thread=",
 		"app-t3code-agents-0123456789ab.slice/t3code-claude-deadbeef.scope name=claude agent=30 thread=1a2b3c4d-1111-4111-8111-111111111111",
+		"app-t3code-agents-0123456789ab.slice/t3code-opencode-11111111.scope name=opencode agent=70 thread=",
+		"app-t3code-agents-0123456789ab.slice/t3code-opencode-22222222.scope name=opencode agent=80 thread=aaaaaaaa-0000-4000-8000-000000000001",
+		"app-t3code-agents-0123456789ab.slice/t3code-opencode-33333333.scope name=opencode agent=90 thread=",
 		"app-t3code-agents.slice/t3code-codex-0a1b2c3d.scope name=codex agent=40 thread=",
 	}
 	if strings.Join(got, "\n") != strings.Join(wantScopes, "\n") {

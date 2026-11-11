@@ -1,0 +1,10 @@
+busy: a game (Hades) uses 2.1 cores and 3.7 GB; cpu at 8.0 of 16 cores, most from t3code agents ×2 (5.6 cores)
+cpu 8.0/16 cores · mem 24.0/62.0 GB, no pressure
+top  t3code agents ×2  5.6 cores  4.2 GB
+     Hades (game)      2.1 cores  3.7 GB
+     firefox ×4        0.4 cores  1.1 GB
+     steam             0.0 cores  200 MB
+     postgres          0.0 cores   50 MB
+next: pulse tree 200.yqw   the 3 processes of Hades (game)
+next: pulse agents         the 2 agents, by thread
+next: pulse top --by mem   the biggest memory users

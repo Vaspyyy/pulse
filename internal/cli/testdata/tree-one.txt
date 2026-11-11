@@ -1,0 +1,2 @@
+opencode serve --port=34253 310.jvf, running 54 min, in agent scope t3code-opencode-11111111.scope
+1 process, 0.0 cores, 180 MB resident, 150 MB of it private

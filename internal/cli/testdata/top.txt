@@ -1,0 +1,9 @@
+cpu 8.0/16 cores · mem 24.0/62.0 GB, no pressure
+t3code agents ×2  5.6 cores  4.2 GB
+Hades (game)      2.1 cores  3.7 GB  200.yqw
+firefox ×4        0.4 cores  1.1 GB  100.upx
+steam             0.0 cores  200 MB  190.xnz
+postgres          0.0 cores   50 MB  400.gfu
+systemd           0.0 cores    4 MB  1.tre
+next: pulse tree 200.yqw   the processes of Hades (game)
+next: pulse top --by mem   sorted by memory instead

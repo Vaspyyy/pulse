@@ -1,6 +1,6 @@
 # Pulse: design
 
-Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3.
+Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)).
 
 Pulse is a personal tool for one machine, where agents always run in T3 Code. So T3 is a first-class target, not an optional extra.
 
@@ -85,13 +85,14 @@ Kept as pitched: two interfaces on one collector, standalone first, no daemon, p
 
 | Package | Imports | Notes |
 | --- | --- | --- |
-| `collect` | stdlib, `golang.org/x/sys` | reads the machine. No TUI or Prism deps, so crux can import it |
-| `collect/t3` | stdlib | T3's agent slices, scopes, limits and threads. **Exists**, with its tests |
+| `collect` | stdlib | reads the machine. No TUI or Prism deps, so crux can import it. **Exists**: CPU, memory, pressure, processes, handles |
+| `collect/collecttest` | `collect` | builds a fake machine (`/proc` and `/sys` trees) for tests |
+| `collect/t3` | stdlib | T3's agent slices, scopes, limits, memory use and threads. **Exists**, with its tests |
 | `collect/gpu` | `purego` | NVML loaded at runtime; AMD and Intel from sysfs |
 | `record` | `collect` | samples a process tree while it runs; owns the run store format |
-| `query` | `collect`, `record` | grouping, trees, the load verdict, diffs |
+| `internal/query` | `collect`, `record` | grouping, trees, games, the load verdict, diffs. **Exists**, without diffs |
 | `attrib` | `query`, `prism/repo` | repo, session and crux attribution, each with a basis |
-| `cli` | `query`, `attrib`, `prism/report` | text and JSON output |
+| `internal/cli` | `query`, `attrib`, `prism/report` | text and JSON output. **Exists**, text only |
 | `tui` | `query`, Bubble Tea, Lip Gloss | does not import Prism |
 
 One binary. `pulse` on a terminal opens the TUI; with `-A`, or when stdout isn't a terminal, it prints the agent card. Agents never need a flag, and the TUI never needs a repo.
@@ -165,12 +166,13 @@ Read from T3's `agentScope` module and this machine's cgroups on 2026-11-09, and
 
 - Every agent process runs in its own transient scope, `t3code-<provider>-<8 hex>.scope`, started with `systemd-run`, with `Delegate=yes` (cpu, cpuset, io, memory and pids handed to the user) and `OOMPolicy=stop`.
 - The scopes sit in `app-t3code-agents-<12 hex>.slice`, one per T3 state directory, under `app-t3code-agents.slice`; scopes that outlive a T3 restart sit directly in `app-t3code-agents.slice`. That slice gets `MemoryHigh` = RAM minus 6 GiB and `MemoryMax` = RAM minus 4 GiB: 56.7 and 58.7 GiB of 62.7 GiB here. On `app-t3code.slice` above it, the agents run at `CPUWeight=10`, `IOWeight=10`, `TasksMax=25%`.
-- Each agent process carries `T3CODE_THREAD_ID` and `T3CODE_CLI_PATH` (the `t3` command) in its environment, and so does everything it starts.
+- A Claude agent carries `T3CODE_THREAD_ID` and `T3CODE_CLI_PATH` (the `t3` command) in its environment, and so does everything it starts. **Not every agent does** (found by `TestLive` on 2026-11-11, then read in T3's server bundle): T3 starts opencode as one server (`opencode serve`) that threads share, in a scope it marks `shared`, without a thread id. Codex gets the id through its `shell_environment_policy`, so it's on the commands Codex runs.
+- So a scope's thread is: its agent's id, or else the one id that its other processes agree on, or else unknown. `pulse agents` shows a scope with no known thread as a shared server.
 - T3 stops an agent with `systemctl --user stop` on its scope, or by writing `cgroup.kill`; it reads OOM kills from the scope's `memory.events`. Its own resource monitor reads `/proc` directly, not `cgroup.procs`.
 
 What Pulse does with that:
 
-- **`pulse agents`:** one line per agent scope, with the thread's title and status, its project (the agent's working directory), model, CPU and memory. Then a headroom line: `agents 6.8 GB; throttled at 56.7 GB, one killed at 58.7 GB`.
+- **`pulse agents`:** one line per agent scope, with the thread's title, its model, CPU, memory and project (from the agent's working directory), and how often the kernel killed something in it for memory. Then a headroom line: `agents use 6.8 GB; throttled at 56.7 GB, one is killed at 58.7 GB`. Memory here is the cgroup's `memory.current`, page cache included, because that's what the limits count. No status: it would come from a cache up to ten minutes old, and the CPU column says whether the agent is working.
 - **The card and `pulse load`** warn when the agents are within 2 GB of `MemoryHigh`. Past it they're throttled; past `MemoryMax` the kernel kills a process, and with `OOMPolicy=stop` that ends the whole agent, build and all.
 - **`pulse run`** records inside the agent's own delegated scope (see [recording runs](#recording-runs)), so T3's stop, kill, limits and OOM handling keep covering the run.
 - **CPU priority is already handled:** at `CPUWeight=10`, agents yield the CPU to a game. GPU, memory and memory bandwidth aren't covered by that, which is why the load verdict still matters.
@@ -178,7 +180,7 @@ What Pulse does with that:
 **Thread details come from T3's own CLI.** `t3 thread show <id> --json` returns the thread's title, status (`running`, …), model, branch, worktree and link; the thread id comes from the agent's environment. Each call takes 0.7 to 0.9 s, nearly all of it the CLI starting (`t3 --version` alone took 764 ms on 2026-11-10), so:
 
 - the TUI fetches titles in the background and fills them in as they arrive;
-- `pulse agents` keeps them in `$XDG_STATE_HOME/pulse-monitor/t3-threads.json` for 10 minutes, fetches missing ones in parallel with a 3 s limit, and shows the thread id when T3 doesn't answer in time;
+- `pulse agents` keeps title and model in `$XDG_STATE_HOME/pulse-monitor/t3-threads.json` for 10 minutes, fetches missing ones in parallel with a 3 s limit, and shows the thread id when T3 doesn't answer in time;
 - the card and `pulse load` never call it.
 
 Everything else Pulse discovers at runtime from unit names, cgroup files and the documented environment variables. It doesn't hardcode T3's numbers, and it doesn't read T3's databases.
@@ -307,7 +309,9 @@ Game markers:
 
 Checked 2026-11-09: Heroic 2.22.4 sets those variables on every game it starts, in one function that all its launch paths call (Epic through legendary, GOG, Amazon through nile, sideloaded, Zoom). `GAMEID` alone isn't a marker, because Heroic also sets it for winetricks. Steam's own client processes carry no `SteamAppId`; only its games do. Both are to be confirmed on real Steam and Heroic games once the collector exists; other launchers get markers once they're seen on a real run.
 
-The thresholds and the marker list live in the config file. The verdict always lists its reasons, so an agent never has to trust a bare "busy". Pulse's SKILL.md tells agents: run `pulse load` before timing measurements or heavy benchmarks, and if it says busy, skip the measurement and say why.
+Markers inside a T3 agent scope don't count: an agent's test under a headless gamescope isn't somebody playing.
+
+The thresholds and the marker list will live in the config file (constants until then). The verdict always lists its reasons, so an agent never has to trust a bare "busy", and a quiet verdict says what was checked: `quiet: cpu 0.8 of 16 cores, no game, no memory pressure`. A CPU reason names the heaviest group, since the asking agent's own build counts too. Pulse's SKILL.md tells agents: run `pulse load` before timing measurements or heavy benchmarks, and if it says busy, skip the measurement and say why.
 
 ## Recording runs
 
@@ -395,7 +399,7 @@ The 2026-11-08 benchmark (52 runs, Sonnet 5.5, 13 tasks on 9 repos) found agents
 
 | # | What | Done when |
 | --- | --- | --- |
-| M0 | collector (no GPU; T3 discovery is done in `collect/t3`), identity, card, `load`, `top`, `tree`, SKILL.md | golden tests on fixture `/proc` trees pass; the card fits 12 lines on the target machine |
+| M0 | collector (no GPU; T3 discovery is done in `collect/t3`), identity, card, `load`, `top`, `tree`, `agents`, SKILL.md | **done 2026-11-11**: golden tests on a built `/proc` tree pass; the card is 10 lines on the target machine. `agents` came forward from M3, since it needs no Prism. Not in M0: `--json`, the `context:` line and "this repo" (M3), `--by gpu\|io`, the config file. Steam and Heroic detection is tested on built processes only, until real games are tried |
 | A | eval A | results written up: go, or fix discoverability first |
 | M1 | TUI (overview, processes, tree, kill, filter, themes), GPU (NVML, sysfs), temperatures | first frame under 100 ms; steady state under 1 % of a core at 1 s with 1,000 processes |
 | M2 | `pulse run`, run store, `runs`, `show`, `diff`, other-load marks | the diff of two fixture runs matches its golden file |
@@ -420,7 +424,7 @@ Pulse measures its own cost with `pulse run`. Like any timing measurement, that 
 
 ## Testing
 
-- Collector tests run on fixture trees captured from real machines (cmdlines and paths scrubbed), through the `fs.FS` roots: PID reuse, exited and unreadable processes, no GPU, NVIDIA, AMD, today's T3 scope layout, a Steam game and a Heroic game.
+- Collector tests run through the `fs.FS` roots on trees that `collect/collecttest` builds: PID reuse, exec, exited and unreadable processes, a T3 scope layout, Steam, Heroic and gamescope games. Built trees keep the tests readable and hold nothing private. Captured trees are for what can't be guessed: T3's layout has one (`collect/t3/testdata`), and GPU sources and real games get them when they're seen.
 - The run cgroup path needs a delegated cgroup, which CI doesn't have: CI tests the sampling fallback, and the cgroup path is tested locally inside a T3 agent scope.
 - **T3 contract test** (exists: `TestLive` in `collect/t3`). Run inside a T3 agent scope, it checks every T3 assumption in this doc against the live machine:
   - the test finds its own scope, and that scope's agent carries this thread's id;
