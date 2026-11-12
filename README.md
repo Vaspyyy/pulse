@@ -115,9 +115,10 @@ go test ./...                             # inside a T3 agent, this also checks 
 go test ./internal/cli -update            # rewrite the golden outputs
 go test ./internal/tui -update            # rewrite the monitor's golden frames
 go test ./collect/t3 -capture 2026-12-01  # save today's T3 layout as a fixture
+go test ./internal/tui -run Shot -shot frame.ansi   # draw the screenshot above, as text with its colours
 ```
 
-No test opens a window or a terminal: the monitor's tests draw its frames in memory. To see where its time goes, `PULSE_PROFILE=cpu.prof pulse` writes the monitor's CPU profile (and its heap to `cpu.prof.heap` when it quits), and `PULSE_LIVE_BENCH=1 go test ./internal/tui -run xxx -bench Live` times one reading and one frame on the running machine.
+No test opens a window or a terminal: the monitor's tests draw its frames in memory. The screenshot is such a frame, of the made-up machine the tests use, shown with `cat` in a terminal of 132 by 40 cells: a picture of a real machine would show what its owner runs. To see where its time goes, `PULSE_PROFILE=cpu.prof pulse` writes the monitor's CPU profile (and its heap to `cpu.prof.heap` when it quits), and `PULSE_LIVE_BENCH=1 go test ./internal/tui -run xxx -bench Live` times one reading and one frame on the running machine.
 
 ## License
 
