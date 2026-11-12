@@ -116,3 +116,7 @@ go test ./collect/t3 -capture 2026-12-01  # save today's T3 layout as a fixture
 ```
 
 No test opens a window or a terminal: the monitor's tests draw its frames in memory. To see where its time goes, `PULSE_PROFILE=cpu.prof pulse` writes the monitor's CPU profile (and its heap to `cpu.prof.heap` when it quits), and `PULSE_LIVE_BENCH=1 go test ./internal/tui -run xxx -bench Live` times one reading and one frame on the running machine.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
