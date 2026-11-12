@@ -54,40 +54,7 @@ type Env struct {
 }
 
 // Version is the version of pulse: the release's tag without its v.
-const Version = "0.1.0"
-
-const usage = `pulse: what is using this machine
-
-  pulse                       on a terminal: the full-screen monitor (? shows its keys)
-  pulse -A                    the card: load verdict, machine, top groups; it is
-                              also what pulse prints when its output is no terminal
-  pulse load                  one line: quiet, or busy with the reasons
-  pulse top [--by cpu|mem|gpu]  the heaviest groups of processes
-  pulse tree <handle|pid|name>  a process and what it started, with totals
-  pulse agents                T3's agents: thread, CPU, memory, limits
-  pulse watch [--json] [--every <seconds>] [--pids <pid,pid>] [-n <readings>]
-                              a reading every 3 seconds, one line each, until
-                              stopped: the load, and what each pid runs and uses
-
-  pulse run [-n name] -- <command>  run a command and record what it uses
-  pulse runs                  the recorded runs
-  pulse show [run]            one run: numbers, processes, timeline
-  pulse diff [run] [run]      two runs side by side
-
-A run is named by its id (r7k2mq), the name given with -n, or "last".
-pulse diff alone compares the newest run with the one of the same
-command before it.
-
-  -b <lines>   line budget (default 12)
-  --version    print the version
-
-Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
-more game markers can be set in the config file (see pulse help config).
-
-A handle is a pid, a dot and three letters (4821.kfx): it names one
-process for good, and the pid in front works with kill and strace.
-Run pulse load before timing measurements: if it says busy, skip them.
-`
+const Version = "0.1.1"
 
 type options struct {
 	budget    int
@@ -98,7 +65,7 @@ type options struct {
 
 // Run runs one command and returns the exit code.
 func Run(args []string, env Env) int {
-	if len(args) == 1 && args[0] == "--version" {
+	if len(args) == 1 && (args[0] == "-V" || args[0] == "--version") {
 		fmt.Fprintln(env.Stdout, "pulse", Version)
 		return 0
 	}
@@ -145,7 +112,7 @@ func Run(args []string, env Env) int {
 			fmt.Fprintf(env.Stdout, configHelp, env.ConfigPath)
 			return 0
 		}
-		fmt.Fprint(env.Stdout, usage)
+		fmt.Fprint(env.Stdout, helpText(env.StdoutTerminal && env.Getenv("NO_COLOR") == ""))
 		return 0
 	case "":
 		r = card(view(env, cfg), cfg)
@@ -237,7 +204,7 @@ func parse(args []string) (options, error) {
 			return o, nil
 		default:
 			if strings.HasPrefix(a, "-") && len(a) > 1 {
-				return o, fmt.Errorf("unknown flag %s", a)
+				return o, fmt.Errorf("unknown flag %s (see pulse --help)", a)
 			}
 			o.args = append(o.args, a)
 		}

@@ -29,7 +29,7 @@ func runCommand(args []string, env Env, cfg Config) int {
 			break
 		}
 		if flag != "-n" && flag != "--name" {
-			fmt.Fprintf(env.Stderr, "pulse: run: unknown flag %s (flags go before the command, and -- ends them)\n", flag)
+			fmt.Fprintf(env.Stderr, "pulse: run: unknown flag %s (flags go before the command, and -- ends them; see pulse --help)\n", flag)
 			return 2
 		}
 		if !hasVal {

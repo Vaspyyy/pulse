@@ -80,10 +80,16 @@ func runEnv(t *testing.T, m *collecttest.Machine, used map[int]uint64, change fu
 	return out.String(), errOut.String(), code
 }
 
+// The tools agree on -V for the version; -v is not pulse's.
 func TestVersion(t *testing.T) {
-	out, errOut, code := run(t, nil, nil, "--version")
-	if out != "pulse "+Version+"\n" || errOut != "" || code != 0 {
-		t.Errorf("--version printed %q and %q, exit %d", out, errOut, code)
+	for _, flag := range []string{"-V", "--version"} {
+		out, errOut, code := run(t, nil, nil, flag)
+		if out != "pulse "+Version+"\n" || errOut != "" || code != 0 {
+			t.Errorf("%s printed %q and %q, exit %d", flag, out, errOut, code)
+		}
+	}
+	if out, errOut, code := run(t, nil, nil, "-v"); out != "" || errOut != "pulse: unknown flag -v (see pulse --help)\n" || code != 2 {
+		t.Errorf("-v printed %q and %q, exit %d", out, errOut, code)
 	}
 }
 
