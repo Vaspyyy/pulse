@@ -82,6 +82,7 @@ lumen does its part from version 0.5.0 on: a light in its title bar when the mac
 | `pulse runs` | the recorded runs |
 | `pulse show [run]` | one run: numbers, processes, timeline |
 | `pulse diff [run] [run]` | two runs side by side |
+| `pulse --version` | the version |
 
 ```
 $ pulse run -n after -- cargo test

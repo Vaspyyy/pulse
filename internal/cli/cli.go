@@ -53,6 +53,9 @@ type Env struct {
 	Threads func(ids []string) map[string]t3.Thread
 }
 
+// Version is the version of pulse: the release's tag without its v.
+const Version = "0.1.0"
+
 const usage = `pulse: what is using this machine
 
   pulse                       on a terminal: the full-screen monitor (? shows its keys)
@@ -76,6 +79,7 @@ pulse diff alone compares the newest run with the one of the same
 command before it.
 
   -b <lines>   line budget (default 12)
+  --version    print the version
 
 Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
 more game markers can be set in the config file (see pulse help config).
@@ -94,6 +98,10 @@ type options struct {
 
 // Run runs one command and returns the exit code.
 func Run(args []string, env Env) int {
+	if len(args) == 1 && args[0] == "--version" {
+		fmt.Fprintln(env.Stdout, "pulse", Version)
+		return 0
+	}
 	if len(args) > 0 && args[0] == "run" {
 		// Everything after run's own flags is the command's, untouched.
 		cfg, problems := ParseConfig(env.Config)

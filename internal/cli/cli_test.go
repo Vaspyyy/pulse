@@ -80,6 +80,13 @@ func runEnv(t *testing.T, m *collecttest.Machine, used map[int]uint64, change fu
 	return out.String(), errOut.String(), code
 }
 
+func TestVersion(t *testing.T) {
+	out, errOut, code := run(t, nil, nil, "--version")
+	if out != "pulse "+Version+"\n" || errOut != "" || code != 0 {
+		t.Errorf("--version printed %q and %q, exit %d", out, errOut, code)
+	}
+}
+
 func TestGolden(t *testing.T) {
 	cases := []struct {
 		name string

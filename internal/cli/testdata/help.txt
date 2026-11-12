@@ -21,6 +21,7 @@ pulse diff alone compares the newest run with the one of the same
 command before it.
 
   -b <lines>   line budget (default 12)
+  --version    print the version
 
 Busy means: a game runs, or CPU, GPU or memory are loaded. The limits and
 more game markers can be set in the config file (see pulse help config).
