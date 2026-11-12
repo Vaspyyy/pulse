@@ -64,6 +64,8 @@ The theme and the tab are remembered. `theme = gruvbox` in the config file sets 
 - **A long `pulse run` says when it is over**, with a standard notification sequence, so a terminal can mark the tab you looked away from. Ten seconds counts as long; `notify_after` in the config file changes that.
 - **`pulse watch --json`** is what a terminal reads to show the load in its title bar and what each tab uses: one JSON line per reading, with a total for every pid it was asked about. A line `pids 4821 5133` on its standard input changes the pids without a new start.
 
+lumen does its part from version 0.5.0 on: a light in its title bar when the machine is busy, what each tab uses beside its name, and what a command cost in its mark. [Its page on the machine](https://vaspyyy.github.io/lumen/docs/machine/) shows it.
+
 `links = on` in the config file turns the links on in another terminal that knows what to do with them. [docs/design.md](docs/design.md) has the exact formats.
 
 ## Commands

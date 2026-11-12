@@ -1,6 +1,6 @@
 # Pulse: design
 
-Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)). Fifth pass, the same day: GPU (NVML, sysfs), temperatures and the config file are built, and the GPU part of the load verdict now goes by power draw, because utilisation turned out to mislead (see [the load verdict](#the-load-verdict)). Sixth pass, the same day: `pulse run`, the run store, `runs`, `show` and `diff` are built (M2); what changed while building them is marked "as built" under [recording runs](#recording-runs).
+Status: draft, 2026-11-09. Built from a pitch for "Pulse as Prism's observability layer", then checked against Prism v0.8.1 (`docs/refs.md`, `output.md`, `context.md`, `evidence.md`, `roadmap.md`), crux 0.7.0, recap 0.4.1, T3 Code's agent scopes, Heroic 2.22.4 and the machine it's for. Second pass the same day: the open questions on handles, run cgroups, NVIDIA, memory, game detection and the name are decided, most of them by tests on the machine. Third pass, 2026-11-10: thread titles come from T3's own CLI, and the first code exists: `collect/t3`, with a live test of everything this doc assumes about T3. Fourth pass, 2026-11-11: M0 is built (collector, handles, the card, `load`, `top`, `tree`, `agents`, SKILL.md), and the live test found that not every agent carries a thread id (see [T3 Code](#t3-code)). Fifth pass, the same day: GPU (NVML, sysfs), temperatures and the config file are built, and the GPU part of the load verdict now goes by power draw, because utilisation turned out to mislead (see [the load verdict](#the-load-verdict)). Sixth pass, the same day: `pulse run`, the run store, `runs`, `show` and `diff` are built (M2); what changed while building them is marked "as built" under [recording runs](#recording-runs). Seventh pass, 2026-11-12: lumen's halves are built too, in lumen 0.5.0 (see [in lumen](#in-lumen)).
 
 Pulse is a personal tool for one machine, where agents always run in T3 Code. So T3 is a first-class target, not an optional extra.
 
@@ -398,7 +398,7 @@ Measured on 2026-11-11 with `PULSE_PROFILE` (a CPU and heap profile of the runni
 
 [lumen](https://github.com/Vaspyyy/lumen) is the terminal built for the five tools (Rust, GPUI, Alacritty's terminal core). The rule on both sides: the tools print standard output that works everywhere, and lumen understands more of it. So nothing below makes Pulse depend on lumen, and what another terminal can't use, it doesn't get.
 
-Pulse knows it runs in lumen by `TERM_PROGRAM=lumen`, which lumen sets for what it starts. **Pulse's halves are built (2026-11-11); lumen's are not.**
+Pulse knows it runs in lumen by `TERM_PROGRAM=lumen`, which lumen sets for what it starts. **Both halves are built: Pulse's on 2026-11-11, lumen's in lumen 0.5.0 on 2026-11-12.**
 
 **1. `pulse watch --json`: the load and each tab's use, for the title bar and the tabs**
 
@@ -448,12 +448,13 @@ for example `cargo test` and `exit 0 after 48.2 s, peak 8.9 GB`. OSC 777 is what
 
 A sixth theme, `lumen`: lumen's default colours (a night sky with a warm lamp in it), with the lamp's amber for what is active and the terminal's own background under it, so lumen's blur shows through. Inside lumen it is the theme to start with, unless the config file names one or the user picked one with `t`. Only a theme picked with `t` is remembered now: before, the first tab change wrote the default down and nothing else could ever be the default again.
 
-**lumen's halves, to be built there**
+**lumen's halves** (in lumen since 0.5.0, but for the last point)
 
-- Title bar: start `pulse watch --json --every 3`, show a dot for `busy` with `reasons` on hover; tabs: write `pids <shell pids>` whenever panes come and go, and show `job`, `cores` and `memory` for each.
-- Links: recognise `lumen-prompt:` on click and type the text at the prompt.
-- Notifications: catch OSC 777 (Alacritty's core drops it), mark the tab.
-- Later, with command blocks: a cgroup per pane, and each command's exact CPU time and peak memory beside its pass or fail mark, as `pulse run` measures them. And a key that drops the monitor down over the window.
+- Title bar: it starts `pulse watch --json --every 3` and shows a light for `busy`, with `reasons` on hover; tabs: it writes `pids <shell pids>` whenever panes come and go, and shows `cores` and `memory` for each, with `job` on hover.
+- Links: it recognises `lumen-prompt:` on click and types the text at the prompt.
+- Notifications: it catches OSC 777 (Alacritty's core drops it), marks the tab, and notifies only when the tab isn't the one being looked at.
+- Command blocks: a command's mark says what its pane uses while it runs, and the most memory that was seen when it has ended, from the same readings.
+- Still to come: a cgroup per pane, and with it each command's exact CPU time and peak memory, as `pulse run` measures them. And a key that drops the monitor down over the window.
 
 ## Prism integration
 
