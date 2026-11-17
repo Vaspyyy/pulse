@@ -367,6 +367,17 @@ What that gives:
 
 "Historical metrics" in v1 means two things: the TUI keeps history in memory while it's open, and recorded runs keep theirs on disk. There is no "what happened at 3 a.m.". If that's wanted later, the light way is an opt-in systemd user timer that samples once a minute into a fixed-size ring file, not a resident daemon.
 
+## The guard
+
+`pulse guard on` links `pkill` and `pgrep` to the pulse binary, next to it. Called by one of those names (`main` looks at `os.Args[0]` before anything else), pulse is `internal/guard`: it finds the real tool, the next one on `PATH` after its own link, adds `-A` to the arguments when they search whole command lines, and replaces itself with the real tool (`exec`), so output, exit code and signals are the real tool's.
+
+Why: with `-f`, `pkill` and `pgrep` match the shell that runs them, because the pattern is part of that shell's command line (`sh -c "pkill -f godot; ..."`). In a month of agent transcripts, 64 of 97 `pkill -f` calls killed their own shell before the rest of the command ran. Agents keep typing `pkill -f`, so the fix has to be in what `pkill` does, not in a new command to learn.
+
+- `-A` is added only to a search with `-f` or `--full`, and not when the arguments already have it or ask for the inverse (`-v`). By name (`pkill zsh`), a shell that matches is meant, and stays a match.
+- Finding `-f` means reading the arguments as getopt does: flags stand anywhere, short ones combine (`-af`), a flag that takes a value swallows the rest of its argument or the next one (`-u f` has no `-f`), long flags can be shortened, `--` ends them, and `pkill` takes a signal anywhere (`-TERM`, `-int`, `-io` are signals, not flags). A wrong reading costs little either way: `-A` not added is the tool as it was, `-A` added by mistake leaves out ancestors that matched by name.
+- Before it adds `-A`, pulse asks the real tool's `--help` whether it knows the flag: an older procps would refuse it. That is one more short process for a call with `-f`, none for the others.
+- `pulse guard` reports what a shell with the current `PATH` gets: the link, whether it comes first, what it hands over to. `on` never replaces a file that isn't its link, `off` removes only its links.
+
 ## TUI
 
 - **Overview:** per-core CPU and frequency, memory and swap, GPU, temperatures, disks and network as braille graphs, with a compact process list under them.
@@ -557,6 +568,7 @@ Each can be revisited; the reason says what would change it.
 | The run cgroup only in a delegated unit | a scope that isn't delegated is writable too, but its subtree is systemd's. One `systemctl show` (6 ms) tells them apart |
 | IO from `wait4`, not from sampled `/proc/<pid>/io` | sampling misses short-lived processes, which is most of a build |
 | A live contract test for T3 | T3 internals can change with any update; a failing test is better than wrong numbers |
+| The guard adds `-A` and runs the real `pkill` | no matching of its own to get wrong, and every flag keeps working; a `pkill` shell function or a hook would cover one agent, a file on `PATH` covers all of them |
 | The name stays Pulse; files go under `pulse-monitor/` | the binary name `pulse` is free and fits the other tools' short names; `~/.config/pulse` belongs to PulseAudio and PipeWire |
 
 ## Open questions

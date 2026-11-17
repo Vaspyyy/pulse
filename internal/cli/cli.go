@@ -37,6 +37,9 @@ type Env struct {
 	// Getenv reads the environment; StateDir is where runs are kept.
 	Getenv   func(string) string
 	StateDir string
+	// Self is the pulse binary's path, for pulse guard's links; "" when
+	// unknown.
+	Self string
 	// Sleep waits between the two readings.
 	Sleep func(time.Duration)
 	// Now is the clock; nil means time.Now.
@@ -54,7 +57,7 @@ type Env struct {
 }
 
 // Version is the version of pulse: the release's tag without its v.
-const Version = "0.1.1"
+const Version = "0.2.0"
 
 type options struct {
 	budget    int
@@ -149,6 +152,12 @@ func Run(args []string, env Env) int {
 			o.budget = 16
 		}
 		r, err = diff(env, o.args)
+	case "guard":
+		if len(o.args) > 1 || len(o.args) == 1 && o.args[0] != "on" && o.args[0] != "off" {
+			fmt.Fprintln(env.Stderr, "pulse: guard takes on, off or nothing")
+			return 2
+		}
+		r, err = guardCmd(env, o.args)
 	default:
 		fmt.Fprintf(env.Stderr, "pulse: unknown command %q; pulse help lists them\n", cmd)
 		return 2

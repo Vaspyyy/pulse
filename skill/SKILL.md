@@ -37,6 +37,8 @@ next: pulse top --by mem   the biggest memory users
 
 `-b <lines>` raises the line budget (12 by default; 24 for `show`, 16 for `diff`). Output that doesn't fit ends in `… N more lines; -b N shows all`.
 
+`pulse guard` says whether `pkill` and `pgrep` on this machine are pulse's links. When it says `on`, `pkill -f <pattern>` and `pgrep -f <pattern>` leave out the shell that runs them and its parents, although the pattern is in that shell's command line: your own shell isn't killed, and isn't listed as a match. When it says `off`, add `-A` to both yourself.
+
 ## Before you measure
 
 Run `pulse load` before timing a build or test, measuring fps, or starting a heavy benchmark.

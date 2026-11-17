@@ -14,12 +14,18 @@ import (
 	"github.com/Vaspyyy/pulse/collect/gpu"
 	"github.com/Vaspyyy/pulse/collect/t3"
 	"github.com/Vaspyyy/pulse/internal/cli"
+	"github.com/Vaspyyy/pulse/internal/guard"
 	"github.com/Vaspyyy/pulse/internal/query"
 	"github.com/Vaspyyy/pulse/internal/tui"
 	"github.com/Vaspyyy/pulse/record"
 )
 
 func main() {
+	// Linked as pkill or pgrep, pulse is that tool (pulse guard).
+	if tool := filepath.Base(os.Args[0]); guard.Is(tool) {
+		os.Exit(guard.Exec(tool, os.Args[1:]))
+	}
+	self, _ := os.Executable() // "": pulse guard says it can't tell
 	roots := collect.Live()
 	configPath := cli.ConfigPath(os.Getenv)
 	config, _ := os.ReadFile(configPath) // no file: the defaults
@@ -71,6 +77,7 @@ func main() {
 		Stdin:          os.Stdin,
 		Getenv:         os.Getenv,
 		StateDir:       stateDir,
+		Self:           self,
 		Stdout:         os.Stdout,
 		Stderr:         os.Stderr,
 		StdoutTerminal: terminal(os.Stdout),
