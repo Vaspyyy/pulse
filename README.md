@@ -27,6 +27,7 @@ It's a personal tool for one Linux machine where agents run in [T3 Code](https:/
 ```sh
 go install github.com/Vaspyyy/pulse@latest
 ln -s "$PWD/skill" ~/.claude/skills/pulse   # from a checkout, for agents
+pulse guard on                              # optional: a pkill -f that can't kill its own shell
 ```
 
 ## The monitor
@@ -82,6 +83,7 @@ lumen does its part from version 0.5.0 on: a light in its title bar when the mac
 | `pulse runs` | the recorded runs |
 | `pulse show [run]` | one run: numbers, processes, timeline |
 | `pulse diff [run] [run]` | two runs side by side |
+| `pulse guard [on\|off]` | whether `pkill` and `pgrep` are links to pulse; `on` makes them, `off` removes them |
 | `pulse -V`, `pulse --version` | the version |
 
 ```
@@ -106,6 +108,24 @@ next: recap abc123f..def4567   what changed between the two runs
 Inside a T3 agent, a run gets a cgroup of its own below the agent's scope, so its CPU time and stall times are exact however it forks, and T3's limits and stop button still cover it.
 
 GPU numbers come from NVML for NVIDIA (loaded at runtime, no cgo) and from sysfs for AMD. When "busy" starts, and which other programs count as games, is set in `~/.config/pulse-monitor/config`: `pulse help config` lists the keys.
+
+## The guard
+
+`pkill -f godot` kills every process with `godot` in its command line. The shell that runs it is one of them: an agent's shell is started as `sh -c "pkill -f godot; ..."`, so the pattern is in its own command line, and `pkill` kills it before the rest of the command runs. `pgrep -f` lists that shell for the same reason, as if the program asked about were running.
+
+```
+$ sh -c "pkill -f 'sleep 600'; echo done"
+Terminated
+$ pulse guard on
+guard: on: pkill -f and pgrep -f leave out the shell that runs them, and its parents
+  pkill  /home/u/go/bin/pkill runs first, and hands over to /usr/bin/pkill with -A
+  pgrep  /home/u/go/bin/pgrep runs first, and hands over to /usr/bin/pgrep with -A
+next: pulse guard off   remove the links
+$ sh -c "pkill -f 'sleep 600'; echo done"
+done
+```
+
+`pulse guard on` links `pkill` and `pgrep` to pulse, in the folder the pulse binary is in. Called by one of those names, pulse runs the real tool, the next one on `PATH`. To a search with `-f` it adds the real tool's own flag `-A` (`--ignore-ancestors`), which leaves out the processes the command descends from; everything else it passes on as it is. So the folder has to come before the system's on `PATH`, and the real tool has to know `-A` (procps-ng 4.0.7 does): `pulse guard` says when either isn't so, and then nothing changes. A search without `-f`, with `-A` already, or with `-v` is never touched, and `/usr/bin/pkill` is still the plain tool.
 
 [skill/SKILL.md](skill/SKILL.md) explains the output. [docs/design.md](docs/design.md) is the plan: what exists is milestones M0, M1 and M2; the Prism integration is still to come.
 

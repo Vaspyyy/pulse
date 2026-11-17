@@ -39,6 +39,16 @@ const helpBody = `
     pulse diff alone compares the newest run with the one of the same
     command before it.
 
+  GUARD
+    pulse guard [on|off]            whether pkill and pgrep are links to pulse; on makes
+                                    them next to the pulse binary, off removes them
+
+    pkill -f and pgrep -f search whole command lines, so they also find the
+    shell that runs them, whose command line holds the pattern: pkill kills
+    it before the rest of its command runs. Called as pkill or pgrep, pulse
+    adds their flag -A (leave out my own parents) to a search with -f and
+    runs the real tool; anything else it passes on unchanged.
+
   FLAGS
     -b <lines>                      line budget (default 12)
     -h, --help                      show this help
